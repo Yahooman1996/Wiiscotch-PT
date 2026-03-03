@@ -477,6 +477,39 @@ static RValue builtinStringInsert(VMContext* ctx, RValue* args, int32_t argCount
     return RValue_makeOwnedString(result);
 }
 
+static RValue builtinStringReplaceAll(VMContext* ctx, RValue* args, int32_t argCount) {
+    (void) ctx;
+    if (3 > argCount || args[0].type != RVALUE_STRING || args[1].type != RVALUE_STRING || args[2].type != RVALUE_STRING) return RValue_makeOwnedString(strdup(""));
+    const char* str = args[0].string != nullptr ? args[0].string : "";
+    const char* needle = args[1].string != nullptr ? args[1].string : "";
+    const char* replacement = args[2].string != nullptr ? args[2].string : "";
+    int32_t needleLen = (int32_t) strlen(needle);
+    if (0 == needleLen) return RValue_makeOwnedString(strdup(str));
+    int32_t replacementLen = (int32_t) strlen(replacement);
+
+    // Count occurrences to pre-allocate
+    int32_t count = 0;
+    const char* p = str;
+    while ((p = strstr(p, needle)) != nullptr) { count++; p += needleLen; }
+
+    int32_t strLen = (int32_t) strlen(str);
+    int32_t resultLen = strLen + count * (replacementLen - needleLen);
+    char* result = malloc(resultLen + 1);
+    char* out = result;
+    p = str;
+    const char* match;
+    while ((match = strstr(p, needle)) != nullptr) {
+        int32_t before = (int32_t) (match - p);
+        memcpy(out, p, before);
+        out += before;
+        memcpy(out, replacement, replacementLen);
+        out += replacementLen;
+        p = match + needleLen;
+    }
+    strcpy(out, p);
+    return RValue_makeOwnedString(result);
+}
+
 // ===[ MATH FUNCTIONS ]===
 
 static RValue builtinDarctan2(VMContext* ctx, RValue* args, int32_t argCount) {
@@ -1253,6 +1286,7 @@ void VMBuiltins_registerAll(void) {
     registerBuiltin("string_char_at", builtinStringCharAt);
     registerBuiltin("string_delete", builtinStringDelete);
     registerBuiltin("string_insert", builtinStringInsert);
+    registerBuiltin("string_replace_all", builtinStringReplaceAll);
     registerBuiltin("ord", builtinOrd);
     registerBuiltin("chr", builtinChr);
 
