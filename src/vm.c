@@ -207,11 +207,15 @@ static void arrayMapSet(ArrayMapEntry** map, int32_t varID, int32_t arrayIndex, 
 }
 
 // ===[ Variable Resolution ]===
-
-static RValue resolveVariableRead(VMContext* ctx, int16_t instanceType, uint32_t varRef) {
+static Variable* resolveVarDef(VMContext* ctx, uint32_t varRef) {
     uint32_t varIndex = varRef & 0x07FFFFFF;
     require(ctx->dataWin->vari.variableCount > varIndex);
     Variable* varDef = &ctx->dataWin->vari.variables[varIndex];
+    return varDef;
+}
+
+static RValue resolveVariableRead(VMContext* ctx, int16_t instanceType, uint32_t varRef) {
+    Variable* varDef = resolveVarDef(ctx, varRef);
 
     // Check for built-in variable (varID == -6 sentinel)
     if (varDef->varID == -6) {
@@ -284,9 +288,7 @@ static RValue resolveVariableRead(VMContext* ctx, int16_t instanceType, uint32_t
 }
 
 static void resolveVariableWrite(VMContext* ctx, int16_t instanceType, uint32_t varRef, RValue val) {
-    uint32_t varIndex = varRef & 0x07FFFFFF;
-    require(ctx->dataWin->vari.variableCount > varIndex);
-    Variable* varDef = &ctx->dataWin->vari.variables[varIndex];
+    Variable* varDef = resolveVarDef(ctx, varRef);
 
     // Check for built-in variable (varID == -6 sentinel)
     if (varDef->varID == -6) {
@@ -477,9 +479,7 @@ static void handlePush(VMContext* ctx, uint32_t instr, const uint8_t* extraData)
 static void handlePushLoc(VMContext* ctx, uint32_t instr, const uint8_t* extraData) {
     (void) instr;
     uint32_t varRef = resolveVarOperand(ctx, extraData);
-    uint32_t varIndex = varRef & 0x07FFFFFF;
-    require(ctx->dataWin->vari.variableCount > varIndex);
-    Variable* varDef = &ctx->dataWin->vari.variables[varIndex];
+    Variable* varDef = resolveVarDef(ctx, varRef);
 
     uint8_t varType = (varRef >> 24) & 0xFF;
     if (varType == VARTYPE_ARRAY || varType == VARTYPE_STACKTOP) {
@@ -503,9 +503,7 @@ static void handlePushLoc(VMContext* ctx, uint32_t instr, const uint8_t* extraDa
 static void handlePushGlb(VMContext* ctx, uint32_t instr, const uint8_t* extraData) {
     (void) instr;
     uint32_t varRef = resolveVarOperand(ctx, extraData);
-    uint32_t varIndex = varRef & 0x07FFFFFF;
-    require(ctx->dataWin->vari.variableCount > varIndex);
-    Variable* varDef = &ctx->dataWin->vari.variables[varIndex];
+    Variable* varDef = resolveVarDef(ctx, varRef);
 
     uint8_t varType = (varRef >> 24) & 0xFF;
     if (varType == VARTYPE_ARRAY || varType == VARTYPE_STACKTOP) {
@@ -529,9 +527,7 @@ static void handlePushGlb(VMContext* ctx, uint32_t instr, const uint8_t* extraDa
 static void handlePushBltn(VMContext* ctx, uint32_t instr, const uint8_t* extraData) {
     (void) instr;
     uint32_t varRef = resolveVarOperand(ctx, extraData);
-    uint32_t varIndex = varRef & 0x07FFFFFF;
-    require(ctx->dataWin->vari.variableCount > varIndex);
-    Variable* varDef = &ctx->dataWin->vari.variables[varIndex];
+    Variable* varDef = resolveVarDef(ctx, varRef);
 
     // Check for array access (e.g. alarm[0])
     uint8_t varType = (varRef >> 24) & 0xFF;
