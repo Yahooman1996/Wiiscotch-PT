@@ -22,6 +22,7 @@ static bool initialized = false;
 static BuiltinEntry* builtinMap = nullptr;
 
 static void registerBuiltin(const char* name, BuiltinFunc func) {
+    requireMessage(shgeti(builtinMap, name) == -1, "Trying to register an already registered builtin function!");
     shput(builtinMap, (char*) name, func);
 }
 
