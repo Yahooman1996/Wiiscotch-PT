@@ -1939,7 +1939,27 @@ static RValue builtinInstancePosition(VMContext* ctx, RValue* args, int32_t argC
 
 // Misc stubs
 STUB_RETURN_ZERO(get_timer)
-STUB_RETURN_UNDEFINED(action_set_alarm)
+static RValue builtinActionSetAlarm(VMContext* ctx, [[maybe_unused]] RValue* args, [[maybe_unused]] int32_t argCount) {
+    int32_t steps = RValue_toInt32(args[0]);
+    int32_t alarmIndex = RValue_toInt32(args[1]);
+
+    if (0 > alarmIndex || alarmIndex >= GML_ALARM_COUNT) {
+        return RValue_makeUndefined();
+    }
+
+    if (ctx->currentInstance != nullptr) {
+        Instance* inst = (Instance*) ctx->currentInstance;
+        Runner* runner = (Runner*) ctx->runner;
+
+        if (shgeti(ctx->alarmsToBeTraced, "*") != -1 || shgeti(ctx->alarmsToBeTraced, runner->dataWin->objt.objects[inst->objectIndex].name) != -1) {
+            printf("VM: [%s] Setting Alarm[%d] = %d (instanceId=%d)\n", runner->dataWin->objt.objects[inst->objectIndex].name, alarmIndex, steps, inst->instanceId);
+        }
+
+        inst->alarm[alarmIndex] = steps;
+    }
+
+    return RValue_makeUndefined();
+}
 
 // ===[ REGISTRATION ]===
 
@@ -2226,5 +2246,5 @@ void VMBuiltins_registerAll(void) {
 
     // Misc
     registerBuiltin("get_timer", builtin_get_timer);
-    registerBuiltin("action_set_alarm", builtin_action_set_alarm);
+    registerBuiltin("action_set_alarm", builtinActionSetAlarm);
 }
