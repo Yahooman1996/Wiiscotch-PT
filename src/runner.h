@@ -2,6 +2,7 @@
 
 #include "data_win.h"
 #include "instance.h"
+#include "renderer.h"
 #include "runner_keyboard.h"
 #include "vm.h"
 
@@ -39,6 +40,7 @@
 typedef struct Runner {
     DataWin* dataWin;
     VMContext* vmContext;
+    Renderer* renderer;
     Room* currentRoom;
     int32_t currentRoomIndex;
     int32_t currentRoomOrderPosition;

@@ -1,0 +1,35 @@
+#pragma once
+
+#include "../../renderer.h"
+#include <glad/glad.h>
+
+// ===[ GLRenderer Struct ]===
+// Exposed in the header so platform-specific code (main.c) can access FBO fields for screenshots.
+typedef struct {
+    Renderer base; // Must be first field for struct embedding
+
+    GLuint shaderProgram;
+    GLint uProjection;
+    GLint uTexture;
+
+    GLuint vao, vbo, ebo;
+    float* vertexData; // MAX_QUADS * VERTICES_PER_QUAD * FLOATS_PER_VERTEX floats
+
+    int32_t quadCount;
+    GLuint currentTextureId;
+
+    GLuint* glTextures;       // one GL texture per TXTR page
+    int32_t* textureWidths;   // needed for UV normalization
+    int32_t* textureHeights;
+    uint32_t textureCount;
+
+    // FBO for render-to-texture (game renders here, then blitted to screen)
+    GLuint fbo;
+    GLuint fboTexture;
+    int32_t fboWidth;
+    int32_t fboHeight;
+    int32_t windowW; // stored from beginFrame for endFrame blit
+    int32_t windowH;
+} GLRenderer;
+
+Renderer* GLRenderer_create(void);

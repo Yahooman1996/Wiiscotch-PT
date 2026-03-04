@@ -1230,12 +1230,65 @@ STUB_RETURN_UNDEFINED(psn_init)
 STUB_RETURN_ZERO(psn_default_user)
 STUB_RETURN_ZERO(psn_get_leaderboard_score)
 
-// Draw stubs
-STUB_RETURN_UNDEFINED(draw_sprite)
-STUB_RETURN_UNDEFINED(draw_sprite_ext)
+// Draw functions
+static RValue builtin_drawSprite(VMContext* ctx, RValue* args, [[maybe_unused]] int32_t argCount) {
+    Runner* runner = (Runner*) ctx->runner;
+    if (runner->renderer == nullptr) return RValue_makeUndefined();
+
+    int32_t spriteIndex = RValue_toInt32(args[0]);
+    int32_t subimg = RValue_toInt32(args[1]);
+    float x = (float) RValue_toReal(args[2]);
+    float y = (float) RValue_toReal(args[3]);
+
+    // If subimg < 0, use the current instance's imageIndex
+    if (0 > subimg && ctx->currentInstance != nullptr) {
+        subimg = (int32_t) ((Instance*) ctx->currentInstance)->imageIndex;
+    }
+
+    Renderer_drawSprite(runner->renderer, spriteIndex, subimg, x, y);
+    return RValue_makeUndefined();
+}
+
+static RValue builtin_drawSpriteExt(VMContext* ctx, RValue* args, [[maybe_unused]] int32_t argCount) {
+    Runner* runner = (Runner*) ctx->runner;
+    if (runner->renderer == nullptr) return RValue_makeUndefined();
+
+    int32_t spriteIndex = RValue_toInt32(args[0]);
+    int32_t subimg = RValue_toInt32(args[1]);
+    float x = (float) RValue_toReal(args[2]);
+    float y = (float) RValue_toReal(args[3]);
+    float xscale = (float) RValue_toReal(args[4]);
+    float yscale = (float) RValue_toReal(args[5]);
+    float rot = (float) RValue_toReal(args[6]);
+    uint32_t color = (uint32_t) RValue_toInt32(args[7]);
+    float alpha = (float) RValue_toReal(args[8]);
+
+    if (0 > subimg && ctx->currentInstance != nullptr) {
+        subimg = (int32_t) ((Instance*) ctx->currentInstance)->imageIndex;
+    }
+
+    Renderer_drawSpriteExt(runner->renderer, spriteIndex, subimg, x, y, xscale, yscale, rot, color, alpha);
+    return RValue_makeUndefined();
+}
+
 STUB_RETURN_UNDEFINED(draw_rectangle)
-STUB_RETURN_UNDEFINED(draw_set_color)
-STUB_RETURN_UNDEFINED(draw_set_alpha)
+
+static RValue builtin_drawSetColor(VMContext* ctx, RValue* args, [[maybe_unused]] int32_t argCount) {
+    Runner* runner = (Runner*) ctx->runner;
+    if (runner->renderer != nullptr) {
+        runner->renderer->drawColor = (uint32_t) RValue_toInt32(args[0]);
+    }
+    return RValue_makeUndefined();
+}
+
+static RValue builtin_drawSetAlpha(VMContext* ctx, RValue* args, [[maybe_unused]] int32_t argCount) {
+    Runner* runner = (Runner*) ctx->runner;
+    if (runner->renderer != nullptr) {
+        runner->renderer->drawAlpha = (float) RValue_toReal(args[0]);
+    }
+    return RValue_makeUndefined();
+}
+
 STUB_RETURN_UNDEFINED(draw_set_font)
 STUB_RETURN_UNDEFINED(draw_set_halign)
 STUB_RETURN_UNDEFINED(draw_set_valign)
@@ -1247,12 +1300,48 @@ STUB_RETURN_UNDEFINED(draw_surface)
 STUB_RETURN_UNDEFINED(draw_surface_ext)
 STUB_RETURN_UNDEFINED(draw_background)
 STUB_RETURN_UNDEFINED(draw_background_ext)
-STUB_RETURN_UNDEFINED(draw_self)
+
+static RValue builtin_draw_self(VMContext* ctx, [[maybe_unused]] RValue* args, [[maybe_unused]] int32_t argCount) {
+    Runner* runner = (Runner*) ctx->runner;
+    if (runner->renderer != nullptr && ctx->currentInstance != nullptr) {
+        Renderer_drawSelf(runner->renderer, (Instance*) ctx->currentInstance);
+    }
+    return RValue_makeUndefined();
+}
+
 STUB_RETURN_UNDEFINED(draw_line)
-STUB_RETURN_UNDEFINED(draw_set_colour)
-STUB_RETURN_ZERO(draw_get_colour)
-STUB_RETURN_ZERO(draw_get_color)
-STUB_RETURN_ZERO(draw_get_alpha)
+
+static RValue builtin_draw_set_colour(VMContext* ctx, RValue* args, [[maybe_unused]] int32_t argCount) {
+    Runner* runner = (Runner*) ctx->runner;
+    if (runner->renderer != nullptr) {
+        runner->renderer->drawColor = (uint32_t) RValue_toInt32(args[0]);
+    }
+    return RValue_makeUndefined();
+}
+
+static RValue builtin_draw_get_colour(VMContext* ctx, [[maybe_unused]] RValue* args, [[maybe_unused]] int32_t argCount) {
+    Runner* runner = (Runner*) ctx->runner;
+    if (runner->renderer != nullptr) {
+        return RValue_makeReal((double) runner->renderer->drawColor);
+    }
+    return RValue_makeReal(0.0);
+}
+
+static RValue builtin_draw_get_color(VMContext* ctx, [[maybe_unused]] RValue* args, [[maybe_unused]] int32_t argCount) {
+    Runner* runner = (Runner*) ctx->runner;
+    if (runner->renderer != nullptr) {
+        return RValue_makeReal((double) runner->renderer->drawColor);
+    }
+    return RValue_makeReal(0.0);
+}
+
+static RValue builtin_draw_get_alpha(VMContext* ctx, [[maybe_unused]] RValue* args, [[maybe_unused]] int32_t argCount) {
+    Runner* runner = (Runner*) ctx->runner;
+    if (runner->renderer != nullptr) {
+        return RValue_makeReal((double) runner->renderer->drawAlpha);
+    }
+    return RValue_makeReal(0.0);
+}
 
 // Surface stubs
 STUB_RETURN_ZERO(surface_create)
@@ -1533,11 +1622,11 @@ void VMBuiltins_registerAll(void) {
     registerBuiltin("psn_get_leaderboard_score", builtin_psn_get_leaderboard_score);
 
     // Draw
-    registerBuiltin("draw_sprite", builtin_draw_sprite);
-    registerBuiltin("draw_sprite_ext", builtin_draw_sprite_ext);
+    registerBuiltin("draw_sprite", builtin_drawSprite);
+    registerBuiltin("draw_sprite_ext", builtin_drawSpriteExt);
     registerBuiltin("draw_rectangle", builtin_draw_rectangle);
-    registerBuiltin("draw_set_color", builtin_draw_set_color);
-    registerBuiltin("draw_set_alpha", builtin_draw_set_alpha);
+    registerBuiltin("draw_set_color", builtin_drawSetColor);
+    registerBuiltin("draw_set_alpha", builtin_drawSetAlpha);
     registerBuiltin("draw_set_font", builtin_draw_set_font);
     registerBuiltin("draw_set_halign", builtin_draw_set_halign);
     registerBuiltin("draw_set_valign", builtin_draw_set_valign);

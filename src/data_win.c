@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "stb_ds.h"
 #include "utils.h"
 
 // ===[ HELPERS ]===
@@ -867,6 +868,12 @@ static void parseTPAG(BinaryReader* reader, DataWin* dw) {
         item->boundingHeight = BinaryReader_readUint16(reader);
         item->texturePageId = BinaryReader_readInt16(reader);
     }
+
+    // Build tpagOffsetMap: absolute file offset -> TPAG index
+    repeat(count, i) {
+        hmput(dw->tpagOffsetMap, ptrs[i], (int32_t) i);
+    }
+
     free(ptrs);
 }
 
@@ -1298,6 +1305,7 @@ void DataWin_free(DataWin* dw) {
 
     // TPAG
     free(dw->tpag.items);
+    hmfree(dw->tpagOffsetMap);
 
     // CODE
     free(dw->code.entries);
@@ -1326,4 +1334,12 @@ void DataWin_free(DataWin* dw) {
     // File buffer and DataWin itself
     free(dw->fileBuffer);
     free(dw);
+}
+
+// ===[ TPAG Offset Resolution ]===
+
+int32_t DataWin_resolveTPAG(DataWin* dw, uint32_t offset) {
+    ptrdiff_t idx = hmgeti(dw->tpagOffsetMap, offset);
+    if (0 > idx) return -1;
+    return dw->tpagOffsetMap[idx].value;
 }

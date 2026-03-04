@@ -11,6 +11,7 @@
 
 #include "runner_keyboard.h"
 #include "runner.h"
+#include "gl_renderer.h"
 #include "stb_ds.h"
 #include "stb_image_write.h"
 
@@ -393,6 +394,11 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // Initialize the renderer
+    Renderer* renderer = GLRenderer_create();
+    renderer->vtable->init(renderer, dataWin);
+    runner->renderer = renderer;
+
     // Set up keyboard input
     glfwSetWindowUserPointer(window, runner);
     glfwSetKeyCallback(window, keyCallback);
@@ -441,21 +447,56 @@ int main(int argc, char* argv[]) {
 
         Room* activeRoom = runner->currentRoom;
 
+        // Query actual framebuffer size (differs from window size on Wayland with fractional scaling)
+        int fbWidth, fbHeight;
+        glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
+
+        // Clear the default framebuffer (window background) to black
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        // Compute view parameters
+        int32_t viewX = 0, viewY = 0;
+        int32_t viewW = (int32_t) gen8->defaultWindowWidth;
+        int32_t viewH = (int32_t) gen8->defaultWindowHeight;
+
+        if (activeRoom->flags & 1) {
+            // Views are enabled, use the first enabled view
+            for (int32_t vi = 0; 8 > vi; vi++) {
+                if (activeRoom->views[vi].enabled) {
+                    viewX = activeRoom->views[vi].viewX;
+                    viewY = activeRoom->views[vi].viewY;
+                    viewW = activeRoom->views[vi].viewWidth;
+                    viewH = activeRoom->views[vi].viewHeight;
+                    break;
+                }
+            }
+        }
+
+        renderer->vtable->beginFrame(renderer, viewX, viewY, viewW, viewH, fbWidth, fbHeight);
+
+        // Now FBO is bound, clear with room background color
         int rInt = BGR_R(activeRoom->backgroundColor);
         int gInt = BGR_G(activeRoom->backgroundColor);
         int bInt = BGR_B(activeRoom->backgroundColor);
-
         glClearColor(rInt / 255.0f, gInt / 255.0f, bInt / 255.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         // Fire Draw events for all visible instances, sorted by depth
         Runner_draw(runner);
 
+        renderer->vtable->endFrame(renderer);
+
         // Capture screenshot if this frame matches a requested frame
         bool shouldScreenshot = hmget(args.screenshotFrames, runner->frameCount);
 
         if (shouldScreenshot) {
+            // Bind FBO so glReadPixels reads from the game's native-resolution texture
+            GLRenderer* gl = (GLRenderer*) renderer;
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, gl->fbo);
             captureScreenshot(args.screenshotPattern, runner->frameCount, (int) gen8->defaultWindowWidth, (int) gen8->defaultWindowHeight);
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
         }
 
         if (args.exitAtFrame >= 0 && runner->frameCount >= args.exitAtFrame) {
@@ -491,6 +532,8 @@ int main(int argc, char* argv[]) {
     }
 
     // Cleanup
+    renderer->vtable->destroy(renderer);
+
     glfwDestroyWindow(window);
     glfwTerminate();
 

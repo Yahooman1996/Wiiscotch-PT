@@ -595,8 +595,12 @@ typedef struct DataWin {
     Strg strg;
     Txtr txtr;
     Audo audo;
+
+    // Lookup map: absolute file offset -> TPAG index (built during TPAG parsing)
+    struct { uint32_t key; int32_t value; }* tpagOffsetMap;
 } DataWin;
 
 DataWin* DataWin_parse(const char* filePath);
 void DataWin_free(DataWin* dataWin);
 void DataWin_printDebugSummary(DataWin* dataWin);
+int32_t DataWin_resolveTPAG(DataWin* dw, uint32_t offset);

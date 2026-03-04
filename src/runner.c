@@ -242,7 +242,18 @@ void Runner_draw(Runner* runner) {
     // Fire draw subtypes in correct GameMaker order
     fireDrawSubtype(runner, drawList, drawCount, DRAW_PRE);
     fireDrawSubtype(runner, drawList, drawCount, DRAW_BEGIN);
-    fireDrawSubtype(runner, drawList, drawCount, DRAW_NORMAL);
+
+    // DRAW_NORMAL: instances with Draw events execute them, others get default sprite draw
+    repeat(drawCount, i) {
+        Instance* inst = drawList[i];
+        int32_t codeId = findEventCodeIdAndOwner(runner->dataWin, inst->objectIndex, EVENT_DRAW, DRAW_NORMAL, nullptr);
+        if (codeId >= 0) {
+            Runner_executeEvent(runner, inst, EVENT_DRAW, DRAW_NORMAL);
+        } else if (runner->renderer != nullptr) {
+            Renderer_drawSelf(runner->renderer, inst);
+        }
+    }
+
     fireDrawSubtype(runner, drawList, drawCount, DRAW_END);
     fireDrawSubtype(runner, drawList, drawCount, DRAW_POST);
     fireDrawSubtype(runner, drawList, drawCount, DRAW_GUI_BEGIN);
