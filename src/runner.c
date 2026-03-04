@@ -720,6 +720,58 @@ static void dispatchCollisionEvents(Runner* runner) {
     }
 }
 
+// ===[ View Following + Clamping ]===
+// Single-axis follow with border-based scrolling, room clamping, and speed limit.
+static int32_t followAxis(int32_t viewPos, int32_t viewSize, int32_t targetPos, uint32_t border, int32_t speed, int32_t roomSize) {
+    int32_t pos = viewPos;
+
+    // Border-based scrolling
+    if (2 * (int32_t) border >= viewSize) {
+        pos = targetPos - viewSize / 2;
+    } else if (targetPos - (int32_t) border < viewPos) {
+        pos = targetPos - (int32_t) border;
+    } else if (targetPos + (int32_t) border > viewPos + viewSize) {
+        pos = targetPos + (int32_t) border - viewSize;
+    }
+
+    // Clamp to room bounds
+    if (0 > pos) pos = 0;
+    if (pos + viewSize > roomSize) pos = roomSize - viewSize;
+
+    // Speed limit
+    if (speed >= 0) {
+        if (pos < viewPos && viewPos - pos > speed) pos = viewPos - speed;
+        if (pos > viewPos && pos - viewPos > speed) pos = viewPos + speed;
+    }
+
+    return pos;
+}
+
+static void updateViews(Runner* runner) {
+    Room* room = runner->currentRoom;
+    if (!(room->flags & 1)) return;
+
+    for (int32_t vi = 0; 8 > vi; vi++) {
+        RoomView* view = &room->views[vi];
+        if (!view->enabled || 0 > view->objectId) continue;
+
+        // Find first active instance of the target object
+        Instance* target = nullptr;
+        int32_t count = (int32_t) arrlen(runner->instances);
+        for (int32_t i = 0; count > i; i++) {
+            Instance* inst = runner->instances[i];
+            if (inst->active && inst->objectIndex == view->objectId) { target = inst; break; }
+        }
+        if (target == nullptr) continue;
+
+        int32_t ix = (int32_t) floor(target->x);
+        int32_t iy = (int32_t) floor(target->y);
+
+        view->viewX = followAxis(view->viewX, view->viewWidth, ix, view->borderX, view->speedX, (int32_t) room->width);
+        view->viewY = followAxis(view->viewY, view->viewHeight, iy, view->borderY, view->speedY, (int32_t) room->height);
+    }
+}
+
 void Runner_step(Runner* runner) {
     // Save xprevious/yprevious for all active instances
     int32_t prevCount = (int32_t) arrlen(runner->instances);
@@ -823,6 +875,9 @@ void Runner_step(Runner* runner) {
 
     // Execute End Step for all instances
     Runner_executeEventForAll(runner, EVENT_STEP, STEP_END);
+
+    // Update view following and clamping
+    updateViews(runner);
 
     // Advance image_index by image_speed for all active instances
     int32_t animCount = (int32_t) arrlen(runner->instances);
