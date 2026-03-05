@@ -497,6 +497,37 @@ static RValue resolveVariableRead(VMContext* ctx, int32_t instanceType, uint32_t
     return result;
 }
 
+// Helper: write a variable value to a single specific instance (always copies, never moves the original val)
+static void writeSingleInstanceVariable(VMContext* ctx, Instance* inst, Variable* varDef, ArrayAccess* access, RValue val) {
+    // Built-in variable (varID == -6 sentinel)
+    if (varDef->varID == -6) {
+        Instance* savedInstance = (Instance*) ctx->currentInstance;
+        ctx->currentInstance = inst;
+        VMBuiltins_setVariable(ctx, varDef->name, val, access->arrayIndex);
+        ctx->currentInstance = savedInstance;
+        return;
+    }
+
+    // Array write
+    if (access->isArray) {
+        int32_t resolvedVarID = resolveArrayAlias(inst->selfVars, inst->selfVarCount, varDef->varID);
+        RValue valCopy = (val.type == RVALUE_STRING && val.string != nullptr) ? RValue_makeOwnedString(strdup(val.string)) : val;
+        arrayMapSet(&inst->selfArrayMap, resolvedVarID, access->arrayIndex, valCopy);
+        hmput(inst->selfArrayVarTracker, resolvedVarID, 1);
+        return;
+    }
+
+    // Scalar write
+    require(inst->selfVarCount > (uint32_t) varDef->varID);
+    RValue* dest = &inst->selfVars[varDef->varID];
+    RValue_free(dest);
+    if (val.type == RVALUE_STRING && val.string != nullptr) {
+        *dest = RValue_makeOwnedString(strdup(val.string));
+    } else {
+        *dest = val;
+    }
+}
+
 static void resolveVariableWrite(VMContext* ctx, int32_t instanceType, uint32_t varRef, RValue val) {
     Variable* varDef = resolveVarDef(ctx, varRef);
 
@@ -508,7 +539,35 @@ static void resolveVariableWrite(VMContext* ctx, int32_t instanceType, uint32_t 
         instanceType = access.instanceType;
     }
 
-    // Resolve target instance for object/instance references (instanceType >= 0)
+    // GML: writing through an object reference (obj_foo.var = val) sets the variable on ALL instances of that object
+    if (instanceType >= 0 && 100000 > instanceType) {
+        Runner* runner = (Runner*) ctx->runner;
+        int32_t instanceCount = (int32_t) arrlen(runner->instances);
+        bool found = false;
+        repeat(instanceCount, i) {
+            Instance* inst = runner->instances[i];
+            if (!inst->active || !VM_isObjectOrDescendant(ctx->dataWin, inst->objectIndex, instanceType)) continue;
+            found = true;
+            writeSingleInstanceVariable(ctx, inst, varDef, &access, val);
+            if (shouldTraceVariable(ctx->varWritesToBeTraced, ctx->dataWin->objt.objects[inst->objectIndex].name, "self", varDef->name)) {
+                char* rvalueAsString = RValue_toString(val);
+                printf("VM: [%s] WRITE %s.%s = %s (instanceId=%d, all-instances object write)\n", ctx->currentCodeName, ctx->dataWin->objt.objects[inst->objectIndex].name, varDef->name, rvalueAsString, inst->instanceId);
+                free(rvalueAsString);
+            }
+        }
+        if (!found) {
+            if (ctx->dataWin->objt.count > (uint32_t) instanceType) {
+                GameObject* gameObject = &ctx->dataWin->objt.objects[instanceType];
+                char* valAsString = RValue_toString(val);
+                fprintf(stderr, "VM: [%s] WRITE var '%s' on object %d (%s) but no instances found (value=%s)\n", ctx->currentCodeName, varDef->name, instanceType, gameObject->name, valAsString);
+                free(valAsString);
+            }
+        }
+        RValue_free(&val);
+        return;
+    }
+
+    // Resolve target instance for instance ID references (instanceType >= 100000) or special types
     Instance* targetInstance = (Instance*) ctx->currentInstance;
     if (instanceType >= 0) {
         targetInstance = findInstanceByTarget(ctx, instanceType);
@@ -516,12 +575,7 @@ static void resolveVariableWrite(VMContext* ctx, int32_t instanceType, uint32_t 
             uint8_t varType = (varRef >> 24) & 0xF8;
             const char* varTypeName = varType == VARTYPE_ARRAY ? "ARRAY" : varType == VARTYPE_STACKTOP ? "STACKTOP" : varType == VARTYPE_NORMAL ? "NORMAL" : varType == VARTYPE_INSTANCE ? "INSTANCE" : "UNKNOWN";
             char* valAsString = RValue_toString(val);
-            if (instanceType < 100000 && (uint32_t) instanceType < ctx->dataWin->objt.count) {
-                GameObject* gameObject = &ctx->dataWin->objt.objects[instanceType];
-                fprintf(stderr, "VM: [%s] WRITE var '%s' on object index %d (%s) but no instance found (varType=%s, isArray=%s, originalInstanceType=%d, hasInstanceType=%s, varID=%d, value=%s)\n", ctx->currentCodeName, varDef->name, instanceType, gameObject->name, varTypeName, access.isArray ? "true" : "false", originalInstanceType, access.hasInstanceType ? "true" : "false", varDef->varID, valAsString);
-            } else {
-                fprintf(stderr, "VM: [%s] WRITE var '%s' on instance %d but no instance found (varType=%s, isArray=%s, originalInstanceType=%d, hasInstanceType=%s, varID=%d, value=%s)\n", ctx->currentCodeName, varDef->name, instanceType, varTypeName, access.isArray ? "true" : "false", originalInstanceType, access.hasInstanceType ? "true" : "false", varDef->varID, valAsString);
-            }
+            fprintf(stderr, "VM: [%s] WRITE var '%s' on instance %d but no instance found (varType=%s, isArray=%s, originalInstanceType=%d, hasInstanceType=%s, varID=%d, value=%s)\n", ctx->currentCodeName, varDef->name, instanceType, varTypeName, access.isArray ? "true" : "false", originalInstanceType, access.hasInstanceType ? "true" : "false", varDef->varID, valAsString);
             free(valAsString);
             return;
         }
