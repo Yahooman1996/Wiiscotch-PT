@@ -32,6 +32,11 @@
 #define VARTYPE_NORMAL    0xA0
 #define VARTYPE_INSTANCE  0xE0
 
+// ===[ GML Math Epsilon (used for floating-point comparisons) ]===
+// The real GameMaker runner uses epsilon-based comparison for all numeric CMP operations.
+// Default value matches the HTML5 runner's g_GMLMathEpsilon.
+#define GML_MATH_EPSILON 1e-5
+
 // ===[ Comparison Kinds ]===
 #define CMP_LT  1
 #define CMP_LTE 2

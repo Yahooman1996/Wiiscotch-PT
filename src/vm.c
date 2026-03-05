@@ -1246,13 +1246,16 @@ static void handleCmp(VMContext* ctx, uint32_t instr) {
     } else {
         double da = RValue_toReal(a);
         double db = RValue_toReal(b);
+        double diff = da - db;
+        // GML uses epsilon-based comparison for all numeric CMP operations
+        int cmp = fabs(diff) <= GML_MATH_EPSILON ? 0 : (diff < 0 ? -1 : 1);
         switch (cmpKind) {
-            case CMP_LT:  result = da < db; break;
-            case CMP_LTE: result = da <= db; break;
-            case CMP_EQ:  result = da == db; break;
-            case CMP_NEQ: result = da != db; break;
-            case CMP_GTE: result = da >= db; break;
-            case CMP_GT:  result = da > db; break;
+            case CMP_LT:  result = cmp < 0; break;
+            case CMP_LTE: result = cmp <= 0; break;
+            case CMP_EQ:  result = cmp == 0; break;
+            case CMP_NEQ: result = cmp != 0; break;
+            case CMP_GTE: result = cmp >= 0; break;
+            case CMP_GT:  result = cmp > 0; break;
             default: result = false; break;
         }
     }
