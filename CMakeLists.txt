@@ -18,13 +18,16 @@ file(GLOB PLATFORM_SOURCES src/${PLATFORM}/*.c)
 add_executable(butterscotch ${SOURCES} ${PLATFORM_SOURCES})
 target_include_directories(butterscotch PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
+# stb_ds
+target_include_directories(butterscotch PUBLIC vendor/stb/ds)
+
 if(PLATFORM STREQUAL "glfw")
     # GLAD
     add_library(glad STATIC vendor/glad/src/glad.c)
     target_include_directories(glad PUBLIC vendor/glad/include)
 
-    # STB
-    target_include_directories(butterscotch PUBLIC vendor/stb)
+    # stb_image
+    target_include_directories(butterscotch PUBLIC vendor/stb/image)
 
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(GLFW3 REQUIRED glfw3)
