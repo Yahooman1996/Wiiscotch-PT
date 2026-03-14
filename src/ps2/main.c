@@ -84,11 +84,11 @@ static void drawCreditsText(GSGLOBAL* gs, GSFONTM* fontm) {
 static void beginStatusScreen(GSGLOBAL* gs, GSFONTM* fontm, const char* gameName) {
     gsKit_clear(gs, GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00));
 
-    u64 white = GS_SETREG_RGBAQ(0xFF, 0xFF, 0xFF, 0x80, 0x00);
+    u64 title = GS_SETREG_RGBAQ(0x5E, 0x54, 0x92, 0x80, 0x00);
     u64 gray = GS_SETREG_RGBAQ(0xAA, 0xAA, 0xAA, 0x80, 0x00);
 
     fontm->Align = GSKIT_FALIGN_CENTER;
-    gsKit_fontm_print_scaled(gs, fontm, 320.0f, 180.0f, 1, 0.8f, white, "Butterscotch");
+    gsKit_fontm_print_scaled(gs, fontm, 320.0f, 180.0f, 1, 0.8f, title, "Butterscotch");
     if (gameName) {
         gsKit_fontm_print_scaled(gs, fontm, 320.0f, 210.0f, 1, 0.5f, gray, gameName);
     }
