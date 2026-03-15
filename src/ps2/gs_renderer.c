@@ -874,7 +874,7 @@ static void gsDrawSpritePart(Renderer* renderer, int32_t tpagIndex, int32_t srcO
     gs->zCounter++;
 }
 
-static void gsDrawRectangle(Renderer* renderer, float x1, float y1, float x2, float y2, uint32_t color, float alpha, [[maybe_unused]] bool outline) {
+static void gsDrawRectangle(Renderer* renderer, float x1, float y1, float x2, float y2, uint32_t color, float alpha, bool outline) {
     GsRenderer* gs = (GsRenderer*) renderer;
 
     uint8_t r = BGR_R(color);
@@ -888,8 +888,23 @@ static void gsDrawRectangle(Renderer* renderer, float x1, float y1, float x2, fl
     float sy2 = (y2 - (float) gs->viewY) * gs->scaleY + gs->offsetY;
 
     u64 rectColor = GS_SETREG_RGBAQ(r, g, b, a, 0x00);
-    gsKit_prim_sprite(gs->gsGlobal, sx1, sy1, sx2, sy2, gs->zCounter, rectColor);
-    gs->zCounter++;
+
+    if (outline) {
+        // Draw 4 one-pixel-wide edges: top, bottom, left, right
+        float pw = gs->scaleX; // one pixel width in screen coords
+        float ph = gs->scaleY; // one pixel height in screen coords
+        gsKit_prim_sprite(gs->gsGlobal, sx1, sy1, sx2 + pw, sy1 + ph, gs->zCounter, rectColor); // top
+        gs->zCounter++;
+        gsKit_prim_sprite(gs->gsGlobal, sx1, sy2, sx2 + pw, sy2 + ph, gs->zCounter, rectColor); // bottom
+        gs->zCounter++;
+        gsKit_prim_sprite(gs->gsGlobal, sx1, sy1 + ph, sx1 + pw, sy2, gs->zCounter, rectColor); // left
+        gs->zCounter++;
+        gsKit_prim_sprite(gs->gsGlobal, sx2, sy1 + ph, sx2 + pw, sy2, gs->zCounter, rectColor); // right
+        gs->zCounter++;
+    } else {
+        gsKit_prim_sprite(gs->gsGlobal, sx1, sy1, sx2, sy2, gs->zCounter, rectColor);
+        gs->zCounter++;
+    }
 }
 
 static void gsDrawLine(Renderer* renderer, float x1, float y1, float x2, float y2, [[maybe_unused]] float width, uint32_t color, float alpha) {
