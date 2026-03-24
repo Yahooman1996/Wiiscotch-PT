@@ -1996,9 +1996,33 @@ static RValue builtinFileTextReadln([[maybe_unused]] VMContext* ctx, RValue* arg
 
     OpenTextFile* file = &openTextFiles[handle];
 
+    int size = 0;
+    int readPos = file->readPos;
+
+    // First we read everything to figure out what will be the size of the string
     // Skip past the current line (consume everything up to and including the newline)
+    while (file->contentLen > readPos) {
+        char c = file->content[readPos];
+        readPos++;
+        if (c == '\n')
+            break;
+        if (c == '\r') {
+            // Handle \r\n
+            if (file->contentLen > readPos && file->content[readPos] == '\n') {
+                readPos++;
+            }
+            break;
+        }
+        size++;
+    }
+
+    // Now we read everything AGAIN, but now for realsies this time
+    char string[size + 1]; // +1 because the last one is null
+    int index = 0;
+
     while (file->contentLen > file->readPos) {
         char c = file->content[file->readPos];
+
         file->readPos++;
         if (c == '\n')
             break;
@@ -2009,9 +2033,12 @@ static RValue builtinFileTextReadln([[maybe_unused]] VMContext* ctx, RValue* arg
             }
             break;
         }
+        string[index++] = c;
     }
 
-    return RValue_makeOwnedString(safeStrdup(""));
+    string[index] = '\0';
+
+    return RValue_makeOwnedString(safeStrdup(string));
 }
 
 static RValue builtinFileTextReadReal([[maybe_unused]] VMContext* ctx, RValue* args, int32_t argCount) {
@@ -3643,8 +3670,7 @@ static RValue builtinStringHashToNewline([[maybe_unused]] VMContext* ctx, RValue
 }
 
 // json_decode
-// TODO: This is hardcoded for deltarune, for some reason the args string isn't working properly
-static RValue builtinJsonDecode(VMContext* ctx, [[maybe_unused]] RValue* args, int32_t argCount) {
+static RValue builtinJsonDecode([[maybe_unused]] VMContext* ctx, RValue* args, int32_t argCount) {
     if (1 > argCount) {
         fprintf(stderr, "[json_decode] Expected at least 1 argument\n");
         return RValue_makeUndefined();
@@ -3652,16 +3678,16 @@ static RValue builtinJsonDecode(VMContext* ctx, [[maybe_unused]] RValue* args, i
 
     int32_t mapIndex = dsMapCreate();
     DsMapEntry **mapPtr = dsMapGet(mapIndex);
-    Runner* runner = (Runner*) ctx->runner;
-    FileSystem* fs = runner->fileSystem;
-    char* content = fs->vtable->readFileText(fs, "lang/lang_en.json");
+    const char* content = args[0].string;
     const JsonValue* json = JsonReader_parse(content);
 
     repeat(JsonReader_objectLength(json), i) {
-        const char *key = JsonReader_getObjectKey(json, i);
-        RValue val = RValue_makeOwnedString((char*)JsonReader_getString(JsonReader_getObjectValue(json, i)));
+        const char *key = safeStrdup(JsonReader_getObjectKey(json, i));
+        RValue val = RValue_makeOwnedString(safeStrdup(JsonReader_getString(JsonReader_getObjectValue(json, i))));
         shput(*mapPtr, key, val);
     }
+
+    JsonReader_free(json);
 
     return RValue_makeReal((double) mapIndex);
 }
