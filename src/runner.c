@@ -531,10 +531,12 @@ void Runner_draw(Runner* runner) {
             } else if(d->layer->type == RoomLayerType_Instances) {
                 RoomLayerInstancesData *data = d->layer->instancesData;
                 // TODO: This isn't the right way to do this
-                for(uint32_t i = 0; i < data->instanceCount; i++)
-                {
+                repeat(data->instanceCount, i) {
                     Instance* inst = hmget(runner->instancesToId, data->instanceIds[i]);
-                    if(inst->depth == 0) inst->depth = d->layer->depth;
+                    if (inst == nullptr)
+                        continue;
+                    if(inst->depth == 0)
+                        inst->depth = d->layer->depth;
                 }
             }
         }
