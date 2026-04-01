@@ -1,10 +1,10 @@
-<h1 align="center">🥧 Butterscotch 🥧</h1>
+<h1 align="center">🥧 Wiiscotch 🥧</h1>
 
 <!-- Badges, about the GitHub repository itself -->
 <!-- There are no Discord servers dedicated to My/AI's Fork -->
 
 > [!IMPORTANT]  
-> Butterscotch is still VERY early in development and it is NOT that good yet.
+> Wiiscotch is a **Nintendo Wii fork** of Butterscotch, which is still VERY early in development and it is NOT that good yet.
 > And keep attention that this is a fork made mostly by AI, which MEANS it is vibe code.
 
 When you create a game in GameMaker: Studio and export it, GameMaker: Studio exports the game code as bytecode instead of native compiled code, and that bytecode is compatible with any other GameMaker: Studio runner (also known as YoYo runner), as long as they have matching GameMaker: Studio versions. This is similar to how Java applications work.
@@ -15,13 +15,15 @@ Ever since Mr. Power created Droidtale 10+ years ago, He had that lingering thou
 
 And that's where Butterscotch comes in! Butterscotch is an open source re-implementation of GameMaker: Studio's runner.
 
+**Wiiscotch** is a Nintendo Wii fork of Butterscotch, bringing GameMaker games to the Wii console using libogc and GX.
+
 **NOTE:** This is a homebrew project.
 
 ## Game Compatibility
 
-Butterscotch's goal is to be able to have Undertale v1.08 (GameMaker: Studio 1.4.1804, Bytecode Version 16) fully playable. But we do want to support more GameMaker: Studio games in the future too!
+Wiiscotch inherits Butterscotch's goal to be able to have Undertale v1.08 (GameMaker: Studio 1.4.1804, Bytecode Version 16) fully playable. But we do want to support more GameMaker: Studio games in the future too!
 
-While our target is Undertale v1.08, that doesn't mean that other games CAN'T run in Butterscotch! Because Butterscotch is a runner and not a Undertale port/remake, you CAN run other GameMaker: Studio games with it and, as long as the game is compiled with GameMaker: Studio 1.4.1804 and they only use GML variables and functions that Butterscotch supports, it should work fine.
+While our target is Undertale v1.08, that doesn't mean that other games CAN'T run in Wiiscotch! Because Wiiscotch is a runner and not a Undertale port/remake, you CAN run other GameMaker: Studio games with it and, as long as the game is compiled with GameMaker: Studio 1.4.1804 and they only use GML variables and functions that Wiiscotch supports, it should work fine.
 
 Of course, there are exceptions that break game compatibility altogether:
 
@@ -38,41 +40,41 @@ Of course, there are exceptions that break game compatibility altogether:
 
 ## How to Play GameMaker Games
 
-To play a GameMaker: Studio game with Butterscotch, you need:
+To play a GameMaker: Studio game with Wiiscotch, you need:
 
 1. **A compatible game**: The game must be compiled with GameMaker: Studio 1.4.1804 (bytecode version 16) and must NOT use YYC or GMRT.
 2. **The `data.win` file**: Extract this from your game's installation directory or game files.
-3. **Butterscotch binary**: Build Butterscotch for your target platform (see [Building Butterscotch](#building-butterscotch)).
+3. **Wiiscotch binary**: Build Wiiscotch for your target platform (see [Building Wiiscotch](#building-wiiscotch)).
 
 ### Running on Desktop (Linux/Windows)
 
 ```bash
-./butterscotch /path/to/data.win
+./wiiscotch /path/to/data.win
 ```
 
 Or with additional options:
 
 ```bash
-./butterscotch --debug /path/to/data.win
+./wiiscotch --debug /path/to/data.win
 ```
 
 ### Running on PlayStation 2
 
 1. Copy your `data.win` file to a USB drive or memory card
-2. Launch Butterscotch from uLaunchELF or your preferred homebrew launcher
+2. Launch Wiiscotch from uLaunchELF or your preferred homebrew launcher
 3. Navigate to the `data.win` file location
 
 ### Running on Nintendo Wii
 
-1. Copy your `data.win` file to your SD card (e.g., in `/apps/butterscotch/`)
-2. Copy the `boot.dol` to `/apps/butterscotch/boot.dol` on your SD card
-3. Launch Butterscotch from the Homebrew Channel
+1. Copy your `data.win` file to your SD card (e.g., in `/apps/wiiscotch/`)
+2. Copy the `boot.dol` to `/apps/wiiscotch/boot.dol` on your SD card
+3. Launch Wiiscotch from the Homebrew Channel
 4. The runner will look for `data.win` in the same directory as the application
 
 > [!NOTE]
 > For Wii, ensure your `data.win` file is placed in the same folder as `boot.dol` on your SD card for automatic loading.
 
-## Building Butterscotch
+## Building Wiiscotch
 
 ### GLFW (Desktop)
 
@@ -84,7 +86,7 @@ make
 
 If you are using CLion, set the platform in `Settings` > `Build, Execution, Deployment` > `CMake` and add `-DPLATFORM=glfw`
 
-Then run Butterscotch with `./butterscotch /path/to/data.win`!
+Then run Wiiscotch with `./wiiscotch /path/to/data.win`!
 
 ### PlayStation 2
 
@@ -137,7 +139,7 @@ The GLFW target has a lot of nifty CLI parameters that you can use to trace and 
 
 ## Debug Features
 
-When running Butterscotch with `--debug`, the following hotkeys are enabled:
+When running Wiiscotch with `--debug`, the following hotkeys are enabled:
 
 * `Page Up`: Moves forward one room
 * `Page Down`: Moves backwards one room
