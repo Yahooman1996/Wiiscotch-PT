@@ -209,6 +209,34 @@ elseif(PLATFORM STREQUAL "ps2")
                 ${CMAKE_SOURCE_DIR}/ps2dev-headers/gcc-include
         )
     endif()
+elseif(PLATFORM STREQUAL "wii")
+    # The Wii has a PowerPC CPU with FPU, but we use float for performance
+    add_compile_definitions(USE_FLOAT_REALS)
+    # Disable Butterscotch VM/interpreter tracing checks for performance
+    add_compile_definitions(DISABLE_VM_TRACING)
+    
+    # Wii-specific compile options
+    add_compile_options(-fsingle-precision-constant)
+    
+    if(WII)
+        # Compiling with devkitPPC
+        target_include_directories(butterscotch PRIVATE 
+            $ENV{DEVKITPRO}/libogc/include 
+            $ENV{DEVKITPPC}/powerpc-eabi/include
+        )
+        target_link_directories(butterscotch PRIVATE $ENV{DEVKITPRO}/libogc/lib/wii)
+        target_link_libraries(butterscotch ogc m)
+        
+        # Set Wii-specific flags
+        target_compile_definitions(butterscotch PRIVATE GEKKO HW_DOL)
+    else()
+        # Development mode (CLion, etc.)
+        target_include_directories(butterscotch PRIVATE
+            ${CMAKE_SOURCE_DIR}/devkitpro/libogc/include
+            ${CMAKE_SOURCE_DIR}/devkitpro/portlibs/wii/include
+        )
+        target_compile_definitions(butterscotch PRIVATE GEKKO HW_DOL)
+    endif()
 else()
     message(FATAL_ERROR "Unknown platform! ${PLATFORM}")
 endif()

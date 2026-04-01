@@ -33,9 +33,12 @@ Of course, there are exceptions that break game compatibility altogether:
 * Linux (GLFW, OpenGL)
 * Windows (GLFW, OpenGL, MinGW)
 * PlayStation 2 (ps2sdk, gsKit)
+* Nintendo Wii (libogc, GX)
 * ...and maybe more in the future!
 
 ## Building Butterscotch
+
+### GLFW (Desktop)
 
 ```bash
 mkdir build && cd build
@@ -46,6 +49,24 @@ make
 If you are using CLion, set the platform in `Settings` > `Build, Execution, Deployment` > `CMake` and add `-DPLATFORM=glfw`
 
 Then run Butterscotch with `./butterscotch /path/to/data.win`!
+
+### PlayStation 2
+
+```bash
+mkdir build && cd build
+cmake -DPLATFORM=ps2 -DCMAKE_TOOLCHAIN_FILE=$PS2SDK/ps2dev.cmake ..
+make
+```
+
+### Nintendo Wii
+
+```bash
+mkdir build && cd build
+cmake -DPLATFORM=wii -DCMAKE_TOOLCHAIN_FILE=$DEVKITPPC/cmake/Wii.cmake ..
+make
+```
+
+This will produce a `boot.dol` file that can be run on a Wii console or Dolphin emulator.
 
 ## CLI parameters
 
@@ -92,7 +113,9 @@ When running Butterscotch with `--debug`, the following hotkeys are enabled:
 
 ## Performance
 
-Performance is pretty good on any modern computer, but when running on low end targets (like the PS2) it is *very* slow when there's a lot of instances on screen, or when a instance does a for loop.
+Performance is pretty good on any modern computer, but when running on low end targets (like the PS2 or Wii) it is *very* slow when there's a lot of instances on screen, or when a instance does a for loop.
+
+The Wii target uses float reals for better performance on the PowerPC FPU.
 
 ## Then why not have a transpiler?
 
@@ -124,6 +147,10 @@ Having a transpiler also have other disadvantages:
 ### Undertale (PlayStation 2)
 
 Here's a video :3 https://youtu.be/3MoAPO8H85U
+
+### Undertale (Nintendo Wii)
+
+Coming soon! The Wii port uses libogc and GX for rendering.
 
 ## Tales of Agentic Engineering
 
