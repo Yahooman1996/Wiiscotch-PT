@@ -36,6 +36,42 @@ Of course, there are exceptions that break game compatibility altogether:
 * Nintendo Wii (libogc, GX)
 * ...and maybe more in the future!
 
+## How to Play GameMaker Games
+
+To play a GameMaker: Studio game with Butterscotch, you need:
+
+1. **A compatible game**: The game must be compiled with GameMaker: Studio 1.4.1804 (bytecode version 16) and must NOT use YYC or GMRT.
+2. **The `data.win` file**: Extract this from your game's installation directory or game files.
+3. **Butterscotch binary**: Build Butterscotch for your target platform (see [Building Butterscotch](#building-butterscotch)).
+
+### Running on Desktop (Linux/Windows)
+
+```bash
+./butterscotch /path/to/data.win
+```
+
+Or with additional options:
+
+```bash
+./butterscotch --debug /path/to/data.win
+```
+
+### Running on PlayStation 2
+
+1. Copy your `data.win` file to a USB drive or memory card
+2. Launch Butterscotch from uLaunchELF or your preferred homebrew launcher
+3. Navigate to the `data.win` file location
+
+### Running on Nintendo Wii
+
+1. Copy your `data.win` file to your SD card (e.g., in `/apps/butterscotch/`)
+2. Copy the `boot.dol` to `/apps/butterscotch/boot.dol` on your SD card
+3. Launch Butterscotch from the Homebrew Channel
+4. The runner will look for `data.win` in the same directory as the application
+
+> [!NOTE]
+> For Wii, ensure your `data.win` file is placed in the same folder as `boot.dol` on your SD card for automatic loading.
+
 ## Building Butterscotch
 
 ### GLFW (Desktop)
