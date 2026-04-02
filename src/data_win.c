@@ -5,6 +5,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <stdint.h>
+
+#ifndef NULL
+#define NULL ((void*)0)
+#endif
+
+#ifndef nullptr
+#define nullptr NULL
+#endif
 
 #include "stb_ds.h"
 #include "utils.h"

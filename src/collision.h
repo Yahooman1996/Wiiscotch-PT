@@ -1,4 +1,5 @@
 #pragma once
+#include <stdbool.h>
 
 #include "data_win.h"
 #include "instance.h"
