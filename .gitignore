@@ -1,53 +1,41 @@
 ```
 # Build artifacts
+build/
+dist/
 *.o
 *.obj
-*.a
-*.so
-*.dylib
-*.dll
 *.exe
+*.dll
+*.so
+*.a
 *.out
 
-# CMake build directory
-build/
-
 # Dependencies
-vendor/
+venv/
+.venv/
+__pycache__/
+*.egg-info/
 
-# Logs
-*.log
-
-# Temporary files
-*.tmp
+# Editors
+.vscode/
+.idea/
 *.swp
 *.swo
 
-# Environment
+# System files
+.DS_Store
+Thumbs.db
 .env
 .env.local
 *.env.*
 
-# OS specific
-.DS_Store
-Thumbs.db
+# Logs
+*.log
 
-# Coverage reports
+# Coverage
 coverage/
 htmlcov/
 .coverage
-
-# IDE
-.vscode/
-.idea/
-
-# Python cache
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-*.so
 
 # Compressed files
 *.zip

@@ -81,7 +81,7 @@ FileSystem* WiiFileSystem_create(JsonValue* config, const char* gameName) {
     if (!fs) return NULL;
     
     // Default save path
-    strncpy(fs->savePath, "sd:/butterscotch_saves/", sizeof(fs->savePath) - 1);
+    strncpy(fs->savePath, "sd:/wiiscotch_saves/", sizeof(fs->savePath) - 1);
     
     // Parse save path from config if available
     if (config) {
