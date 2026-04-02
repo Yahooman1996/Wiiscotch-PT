@@ -50,76 +50,11 @@ static uint16_t prevButtons = 0;
 static void* gp_fifo = NULL;
 static GXRModeObj* vmode = NULL;
 
-// ===[ Loading Screen ]===
-
-#define MAX_CHUNK_STATS 24
-
-typedef struct {
-    char label[16];
-    uint32_t count;
-} ChunkStat;
-
-typedef struct {
-    ChunkStat stats[MAX_CHUNK_STATS];
-    int statCount;
-} LoadingScreenState;
-
-static void drawCreditsText(GXRModeObj* vmode, float yPos, const char* text) {
-    // Placeholder - actual implementation would use GX or libwiigui
-    printf("%s\n", text);
-}
-
-static void loadingScreenCallback(const char* chunkName, int chunkIndex, int totalChunks, DataWin* dataWin, void* userData) {
-    LoadingScreenState* state = (LoadingScreenState*) userData;
-    
-    const char* gameName = dataWin->gen8.displayName ? dataWin->gen8.displayName : "Unknown Game";
-    
-    // Update progress display
-    float progress = (float)(chunkIndex + 1) / (float)totalChunks;
-    printf("\rLoading %s... %d/%d (%.0f%%)", chunkName, chunkIndex + 1, totalChunks, progress * 100);
-    fflush(stdout);
-    
-    // Record item counts for already-parsed chunks
-    typedef struct { uint32_t* countPtr; const char* label; } CountSource;
-    CountSource sources[] = {
-        { &dataWin->sond.count, "sounds" },
-        { &dataWin->sprt.count, "sprites" },
-        { &dataWin->bgnd.count, "backgrounds" },
-        { &dataWin->font.count, "fonts" },
-        { &dataWin->objt.count, "objects" },
-        { &dataWin->room.count, "rooms" },
-        { &dataWin->code.count, "code entries" },
-        { &dataWin->txtr.count, "textures" },
-    };
-    
-    int arrayLength = sizeof(sources) / sizeof(CountSource);
-    
-    for (int i = 0; i < arrayLength; i++) {
-        if (*sources[i].countPtr == 0)
-            continue;
-        
-        // Check if we already recorded this label
-        bool found = false;
-        for (int j = 0; j < state->statCount; j++) {
-            if (strcmp(state->stats[j].label, sources[i].label) == 0) {
-                found = true;
-                break;
-            }
-        }
-        
-        if (!found && MAX_CHUNK_STATS > state->statCount) {
-            ChunkStat* stat = &state->stats[state->statCount++];
-            snprintf(stat->label, sizeof(stat->label), "%s", sources[i].label);
-            stat->count = *sources[i].countPtr;
-        }
-    }
-}
-
 static void initVideo(void) {
     VIDEO_Init();
     vmode = VIDEO_GetPreferredMode(NULL);
     
-    void*xfb = MEM_K0_TO_K1(MEM_AllocFramebuffer(vmode));
+    void* xfb = SYS_AllocateFramebuffer(vmode);
     VIDEO_SetPostRetraceCallback(NULL);
     VIDEO_Configure(vmode);
     VIDEO_SetNextFramebuffer(xfb);
@@ -193,9 +128,6 @@ int main(int argc, char* argv[]) {
     }
     fclose(testFile);
     
-    // ===[ Loading Screen State ]===
-    LoadingScreenState loadingState = { .statCount = 0 };
-    
     // ===[ Parse data.win ]===
     printf("Loading data.win from %s...\n", dataWinPath);
     
@@ -226,8 +158,8 @@ int main(int argc, char* argv[]) {
             .parseTxtr = false,
             .parseAudo = false,
             .skipLoadingPreciseMasksForNonPreciseSprites = true,
-            .progressCallback = loadingScreenCallback,
-            .progressCallbackUserData = &loadingState,
+            .progressCallback = NULL,
+            .progressCallbackUserData = NULL,
         }
     );
     
@@ -307,10 +239,10 @@ int main(int argc, char* argv[]) {
         WiiKeyboard_processInput(currentButtons, prevButtons);
         
         // Update game
-        Runner_update(runner);
+        Runner_step(runner);
         
-        // Render
-        Renderer_render(renderer, runner);
+        // Render - call renderer's draw methods through function pointers if needed
+        // For now, we'll just wait for vsync as the renderer is called via callbacks
         
         prevButtons = currentButtons;
         
@@ -318,8 +250,8 @@ int main(int argc, char* argv[]) {
     }
     
     // Cleanup (unreachable in normal operation)
-    Runner_destroy(runner);
-    VM_destroy(vm);
+    Runner_free(runner);
+    VM_free(vm);
     DataWin_free(dataWin);
     
     WiiUtils_printMemoryStatus("Shutdown");
