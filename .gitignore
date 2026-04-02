@@ -1,1 +1,48 @@
-Nothing should be ignored since only a source code file (`src/wii/main.c`) was modified and there are no build artifacts, dependencies, or temporary files in the changes.
+```
+# Build artifacts
+build/
+CMakeFiles/
+*.cmake
+Makefile
+cmake_install.cmake
+
+# Compiled files
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+
+# Dependencies
+.venv/
+venv/
+env/
+node_modules/
+
+# Logs
+*.log
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# CMake specific
+CMakeCache.txt
+cmake-build-*/
+```

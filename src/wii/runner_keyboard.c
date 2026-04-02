@@ -1,13 +1,12 @@
 #include "runner_keyboard.h"
 #include "../runner.h"
 #include <ogc/pad.h>
-#include <ogc/usbkeyboard.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
 
-// Track USB keyboard initialization state
-static bool usbKeyboardInitialized = false;
+// USB Keyboard support is deprecated/removed in modern libogc.
+// We rely on Wii Remote (WPAD) and GameCube Controller (PAD) instead.
 
 // Wii controller button mappings to GML key codes
 typedef struct {
@@ -115,14 +114,13 @@ static const uint16_t usbKeyToGml[] = {
 };
 
 void WiiKeyboard_init(void) {
-    if (!usbKeyboardInitialized) {
-        USB_Initialize();
-        usbKeyboardInitialized = true;
-    }
+    // USB Keyboard initialization removed - not supported in modern libogc
+    // GameCube and Wii Remote controllers are initialized in main.c
 }
 
 bool WiiKeyboard_isConnected(void) {
-    return usbKeyboardInitialized && USB_IsKeyboardConnected();
+    // Always return true since we have GameCube controller support
+    return true;
 }
 
 static int32_t mapPadButton(uint16_t button, bool isClassic) {
