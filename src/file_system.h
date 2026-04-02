@@ -1,4 +1,5 @@
 #pragma once
+#include <stdbool.h>
 
 // ===[ FileSystem Vtable ]===
 // Platform-agnostic file system interface
