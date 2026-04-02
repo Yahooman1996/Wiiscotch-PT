@@ -46,6 +46,9 @@ static int padMappingCount = 0;
 // Previous frame's button state for detecting press/release edges
 static uint16_t prevButtons = 0;
 
+// Global runner instance for keyboard input handling
+Runner* g_runner = NULL;
+
 // Video variables
 static void* gp_fifo = NULL;
 static GXRModeObj* vmode = NULL;
@@ -216,6 +219,7 @@ int main(int argc, char* argv[]) {
     
     VMContext* vm = VM_create(dataWin);
     Runner* runner = Runner_create(dataWin, vm, fileSystem);
+    g_runner = runner;  // Set global runner for keyboard input handling
     
     WiiUtils_printMemoryStatus("After VM and runner creation");
     

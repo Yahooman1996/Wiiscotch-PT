@@ -1,62 +1,26 @@
 #include "runner_keyboard.h"
 #include "../runner.h"
 #include <ogc/pad.h>
+#include <wiiuse/wpad.h>
 #include <wiikeyboard/keyboard.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
 
 // Keyboard input handling for Wii using libwiikeyboard (part of libogc)
-// Handles USB Keyboard via libwiikeyboard and GameCube/Wii controllers via PAD
+// Handles USB Keyboard via libwiikeyboard and GameCube/Wii controllers via PAD/WPAD
 
-// Wii controller button mappings to GML key codes
-typedef struct {
-    uint16_t padButton;
-    int32_t gmlKey;
-} PadMapping;
+extern Runner* g_runner;  // Global runner instance for accessing keyboard state
 
-static PadMapping padMappings[] = {
-    { PAD_BUTTON_A, 32 },      // Space
-    { PAD_BUTTON_B, 304 },     // Shift
-    { PAD_BUTTON_X, 90 },      // Z
-    { PAD_BUTTON_Y, 88 },      // X
-    { PAD_BUTTON_START, 13 },  // Enter
-    { PAD_BUTTON_UP, 273 },    // Up arrow
-    { PAD_BUTTON_DOWN, 274 },  // Down arrow
-    { PAD_BUTTON_LEFT, 276 },  // Left arrow
-    { PAD_BUTTON_RIGHT, 275 }, // Right arrow
-    { PAD_TRIGGER_L, 306 },    // Ctrl
-    { PAD_TRIGGER_R, 308 },    // Alt
-    { 0, 0 }
-};
-
-// Classic Controller button mappings (expanded)
-static PadMapping classicMappings[] = {
-    { PAD_CLASSIC_BUTTON_A, 32 },      // Space
-    { PAD_CLASSIC_BUTTON_B, 304 },     // Shift
-    { PAD_CLASSIC_BUTTON_X, 90 },      // Z
-    { PAD_CLASSIC_BUTTON_Y, 88 },      // X
-    { PAD_CLASSIC_BUTTON_PLUS, 13 },   // Enter
-    { PAD_CLASSIC_BUTTON_UP, 273 },    // Up arrow
-    { PAD_CLASSIC_BUTTON_DOWN, 274 },  // Down arrow
-    { PAD_CLASSIC_BUTTON_LEFT, 276 },  // Left arrow
-    { PAD_CLASSIC_BUTTON_RIGHT, 275 }, // Right arrow
-    { PAD_CLASSIC_BUTTON_ZL, 306 },    // Ctrl
-    { PAD_CLASSIC_BUTTON_ZR, 308 },    // Alt
-    { PAD_CLASSIC_BUTTON_HOME, 27 },   // Escape
-    { PAD_CLASSIC_BUTTON_MINUS, 8 },   // Backspace
-    { 0, 0 }
-};
-
-// Convert libwiikeyboard scancode to GML key code
-static int32_t convertScancodeToGml(char sym) {
+// Convert libwiikeyboard keycode to GML key code
+static int32_t convertKeycodeToGml(char key) {
     // Direct ASCII characters (printable)
-    if (sym >= 32 && sym <= 126) {
-        return sym;
+    if (key >= 32 && key <= 126) {
+        return key;
     }
     
-    // Special keys based on libwiikeyboard scancodes
-    switch (sym) {
+    // Special keys based on libwiikeyboard keycodes
+    switch (key) {
         case 13:  return 13;   // Enter
         case 27:  return 27;   // Escape
         case 8:   return 8;    // Backspace
@@ -106,108 +70,139 @@ bool WiiKeyboard_isConnected(void) {
     return true;
 }
 
-static int32_t mapPadButton(uint16_t button, bool isClassic) {
-    PadMapping* mappings = isClassic ? classicMappings : padMappings;
-    for (int i = 0; mappings[i].padButton != 0; i++) {
-        if (button & mappings[i].padButton) {
-            return mappings[i].gmlKey;
-        }
-    }
-    return -1;
-}
-
 void WiiKeyboard_processInput(uint16_t currentButtons, uint16_t prevButtons) {
+    RunnerKeyboardState* kb = g_runner->keyboard;
+    
     // Process USB keyboard input via libwiikeyboard
     keyboard_event ke;
     s32 res = KEYBOARD_GetEvent(&ke);
     while (res) {
         if (ke.type == KEYBOARD_PRESSED) {
-            int32_t gmlKey = convertScancodeToGml(ke.sym);
+            int32_t gmlKey = convertKeycodeToGml(ke.key);
             if (gmlKey > 0) {
-                Runner_keyPressed(gmlKey);
+                RunnerKeyboard_onKeyDown(kb, gmlKey);
             }
         } else if (ke.type == KEYBOARD_RELEASED) {
-            int32_t gmlKey = convertScancodeToGml(ke.sym);
+            int32_t gmlKey = convertKeycodeToGml(ke.key);
             if (gmlKey > 0) {
-                Runner_keyReleased(gmlKey);
+                RunnerKeyboard_onKeyUp(kb, gmlKey);
             }
         }
         res = KEYBOARD_GetEvent(&ke);
     }
     
-    // Detect controller type (Classic Controller or standard Wiimote)
-    uint32_t expType = PAD_Expansion(0);
-    bool isClassic = (expType == PAD_EXP_CLASSIC);
-    
-    // Handle button presses for gamepad
+    // Handle button presses for GameCube controller
     uint16_t pressed = currentButtons & ~prevButtons;
     uint16_t released = ~currentButtons & prevButtons;
     
-    for (int i = 0; padMappings[i].padButton != 0; i++) {
-        if (pressed & padMappings[i].padButton) {
-            Runner_keyPressed(padMappings[i].gmlKey);
+    // Standard GameCube/Wiimote button mappings
+    static const struct { uint16_t button; int32_t gmlKey; } padMappings[] = {
+        { PAD_BUTTON_A, 32 },      // Space
+        { PAD_BUTTON_B, 304 },     // Shift
+        { PAD_BUTTON_X, 90 },      // Z
+        { PAD_BUTTON_Y, 88 },      // X
+        { PAD_BUTTON_START, 13 },  // Enter
+        { PAD_BUTTON_UP, 273 },    // Up arrow
+        { PAD_BUTTON_DOWN, 274 },  // Down arrow
+        { PAD_BUTTON_LEFT, 276 },  // Left arrow
+        { PAD_BUTTON_RIGHT, 275 }, // Right arrow
+        { PAD_TRIGGER_L, 306 },    // Ctrl
+        { PAD_TRIGGER_R, 308 },    // Alt
+        { 0, 0 }
+    };
+    
+    for (int i = 0; padMappings[i].button != 0; i++) {
+        if (pressed & padMappings[i].button) {
+            RunnerKeyboard_onKeyDown(kb, padMappings[i].gmlKey);
         }
-        if (released & padMappings[i].padButton) {
-            Runner_keyReleased(padMappings[i].gmlKey);
+        if (released & padMappings[i].button) {
+            RunnerKeyboard_onKeyUp(kb, padMappings[i].gmlKey);
         }
     }
     
-    // Handle Classic Controller buttons if connected
+    // Check for Classic Controller attachment
+    WPAD_ScanPads();
+    int32_t expType = WPAD_Expansion(0);
+    bool isClassic = (expType == WPAD_EXP_CLASSIC);
+    
     if (isClassic) {
-        for (int i = 0; classicMappings[i].padButton != 0; i++) {
-            if (pressed & classicMappings[i].padButton) {
-                Runner_keyPressed(classicMappings[i].gmlKey);
+        // Classic Controller button mappings
+        static const struct { uint16_t button; int32_t gmlKey; } classicMappings[] = {
+            { WPAD_CLASSIC_BUTTON_A, 32 },      // Space
+            { WPAD_CLASSIC_BUTTON_B, 304 },     // Shift
+            { WPAD_CLASSIC_BUTTON_X, 90 },      // Z
+            { WPAD_CLASSIC_BUTTON_Y, 88 },      // X
+            { WPAD_CLASSIC_BUTTON_PLUS, 13 },   // Enter
+            { WPAD_CLASSIC_BUTTON_UP, 273 },    // Up arrow
+            { WPAD_CLASSIC_BUTTON_DOWN, 274 },  // Down arrow
+            { WPAD_CLASSIC_BUTTON_LEFT, 276 },  // Left arrow
+            { WPAD_CLASSIC_BUTTON_RIGHT, 275 }, // Right arrow
+            { WPAD_CLASSIC_BUTTON_ZL, 306 },    // Ctrl
+            { WPAD_CLASSIC_BUTTON_ZR, 308 },    // Alt
+            { WPAD_CLASSIC_BUTTON_HOME, 27 },   // Escape
+            { WPAD_CLASSIC_BUTTON_MINUS, 8 },   // Backspace
+            { 0, 0 }
+        };
+        
+        uint16_t classicPressed = pressed;
+        uint16_t classicReleased = released;
+        
+        for (int i = 0; classicMappings[i].button != 0; i++) {
+            if (classicPressed & classicMappings[i].button) {
+                RunnerKeyboard_onKeyDown(kb, classicMappings[i].gmlKey);
             }
-            if (released & classicMappings[i].padButton) {
-                Runner_keyReleased(classicMappings[i].gmlKey);
+            if (classicReleased & classicMappings[i].button) {
+                RunnerKeyboard_onKeyUp(kb, classicMappings[i].gmlKey);
             }
         }
         
         // Handle Classic Controller analog sticks
-        Stick_t stick = PAD_ClassicStick(0);
-        
-        // Left stick X axis
-        if (stick.x < -30) {
-            Runner_keyDown(276); // Left
-        } else if (stick.x > 30) {
-            Runner_keyDown(275); // Right
-        }
-        
-        // Left stick Y axis
-        if (stick.y < -30) {
-            Runner_keyDown(274); // Down
-        } else if (stick.y > 30) {
-            Runner_keyDown(273); // Up
-        }
-        
-        // Right stick (optional support)
-        Stick_t rightStick = PAD_ClassicRightStick(0);
-        if (rightStick.x < -30) {
-            Runner_keyDown(276); // Left
-        } else if (rightStick.x > 30) {
-            Runner_keyDown(275); // Right
-        }
-        if (rightStick.y < -30) {
-            Runner_keyDown(274); // Down
-        } else if (rightStick.y > 30) {
-            Runner_keyDown(273); // Up
+        struct WPADData* data = WPAD_Data(0);
+        if (data) {
+            // Left stick
+            if (data->exp.classic.ljs.x < -30) {
+                RunnerKeyboard_onKeyDown(kb, 276); // Left
+            } else if (data->exp.classic.ljs.x > 30) {
+                RunnerKeyboard_onKeyDown(kb, 275); // Right
+            }
+            
+            if (data->exp.classic.ljs.y < -30) {
+                RunnerKeyboard_onKeyDown(kb, 274); // Down
+            } else if (data->exp.classic.ljs.y > 30) {
+                RunnerKeyboard_onKeyDown(kb, 273); // Up
+            }
+            
+            // Right stick
+            if (data->exp.classic.rjs.x < -30) {
+                RunnerKeyboard_onKeyDown(kb, 276); // Left
+            } else if (data->exp.classic.rjs.x > 30) {
+                RunnerKeyboard_onKeyDown(kb, 275); // Right
+            }
+            
+            if (data->exp.classic.rjs.y < -30) {
+                RunnerKeyboard_onKeyDown(kb, 274); // Down
+            } else if (data->exp.classic.rjs.y > 30) {
+                RunnerKeyboard_onKeyDown(kb, 273); // Up
+            }
         }
     } else {
-        // Handle standard Wiimote analog stick (if available via Nunchuk)
-        Stick_t stick = PAD_Stick(0);
-        
-        // Left stick X axis
-        if (stick.x < -30) {
-            Runner_keyDown(276); // Left
-        } else if (stick.x > 30) {
-            Runner_keyDown(275); // Right
-        }
-        
-        // Left stick Y axis
-        if (stick.y < -30) {
-            Runner_keyDown(274); // Down
-        } else if (stick.y > 30) {
-            Runner_keyDown(273); // Up
+        // Handle Nunchuk analog stick if attached
+        int32_t nunchukType = WPAD_Expansion(0);
+        if (nunchukType == WPAD_EXP_NUNCHUK) {
+            struct WPADData* data = WPAD_Data(0);
+            if (data) {
+                if (data->exp.nunchuk.js.x < -30) {
+                    RunnerKeyboard_onKeyDown(kb, 276); // Left
+                } else if (data->exp.nunchuk.js.x > 30) {
+                    RunnerKeyboard_onKeyDown(kb, 275); // Right
+                }
+                
+                if (data->exp.nunchuk.js.y < -30) {
+                    RunnerKeyboard_onKeyDown(kb, 274); // Down
+                } else if (data->exp.nunchuk.js.y > 30) {
+                    RunnerKeyboard_onKeyDown(kb, 273); // Up
+                }
+            }
         }
     }
 }
