@@ -208,12 +208,13 @@ Coming soon! The Wii port uses libogc and GX for rendering.
 
 ## Tales of Agentic Engineering
 
-Since I created Droidtale, I've always had the thought about "if it is a VM, then you could reimplement it and port any GameMaker game to any platform, right?".
+Since Mr. Power created Droidtale, He've always had the thought about "if it is a VM, then you could reimplement it and port any GameMaker game to any platform, right?".
 
-Fast forward ten years, and while I was toying around with Claude Code I've thought about "what if I asked Claude to vibe code a GameMaker runner re-implementation in Kotlin lol". Of course, this did not go well because Claude was not even able to render the Undertale intro sequence, until I intervened and started nudging it in the right direction. After nudging it, and debugging it manually, it actually got somewhere and was able to render Undertale's intro sequence up until the main menu...
+Fast forward ten years, and while he was toying around with Claude Code he've thought about "what if I asked Claude to vibe code a GameMaker runner re-implementation in Kotlin lol". Of course, this did not go well because Claude was not even able to render the Undertale intro sequence, until he intervened and started nudging it in the right direction. After nudging it, and debugging it manually, it actually got somewhere and was able to render Undertale's intro sequence up until the main menu...
 
-...and that's when I found out that we were onto something here and that the idea could be viable. And that's when I started learning C and rewriting the runner to be cross-platform.
+...and that's when he found out that we were onto something here and that the idea could be viable. And that's when I started learning C and rewriting the runner to be cross-platform.
 
+### Now Kostya speaks in!
 Wiiscotch is "vibe coded", that is, I did let Qwen Coder implement everything (and will be properly tested). This will work (for now), and anyone that says that "vibe coding" works and will replace all developers are lying, or they aren't skilled enough to know what good code looks like, or they are rich and have a lot of money to spend while Claude keeps getting stuck trying to resolve bugs that they don't know how to fix like [it was a infinite monkey theorem](https://en.wikipedia.org/wiki/Infinite_monkey_theorem).
 
 Wiiscotch is made with an "agentic engineering" approach. I did use Qwen Coder to implement a lot of things in Wiiscotch, but every time this is tested on a real authentic Nintendo Wii hardware and a problem will be send as a feedback.
@@ -233,4 +234,4 @@ That said, here are some tips and tricks with using Claude Code for projects lik
 * Adding input recording and playback allows us to record a set of inputs that reproduce a specific bug, and then we can tell Claude to playback our inputs to figure out what could be going wrong to cause that specific bug.
 * You still need to know EXACTLY what you want, and know HOW are you going to break down the problem into small pieces. Just like what you already do when programming. If I didn't already have previous knowledge on how the YoYo runner worked, I would've probably said "pls port Undertale for me kthxbye" and that would've probably gone nowhere.
 
-However I still needed to keep an eye out on whatever Claude was doing if they were trying to fix a non-trivial problem, because if I didn't attempt to nudge it in the right direction, it would go completely off the rails.
+However I still needed to keep an eye out on whatever Qwen Coder was doing if they were trying to fix a non-trivial problem, because if I didn't attempt to nudge it in the right direction, it would go completely off the rails.
