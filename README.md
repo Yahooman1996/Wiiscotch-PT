@@ -4,7 +4,7 @@
 <!-- There are no Discord servers dedicated to My/AI's Fork -->
 
 > [!IMPORTANT]  
-> Wiiscotch is still VERY early in development and it is NOT that good yet.
+> Wiiscotch is a **Nintendo Wii fork** of Butterscotch, which is still VERY early in development and it is NOT that good yet.
 > And keep attention that this is a fork made mostly by AI, which MEANS it is vibe code.
 
 When you create a game in GameMaker: Studio and export it, GameMaker: Studio exports the game code as bytecode instead of native compiled code, and that bytecode is compatible with any other GameMaker: Studio runner (also known as YoYo runner), as long as they have matching GameMaker: Studio versions. This is similar to how Java applications work.
@@ -15,11 +15,13 @@ Ever since Mr. Power created Droidtale 10+ years ago, He had that lingering thou
 
 And that's where Wiiscotch comes in! Wiiscotch is an open source re-implementation of GameMaker: Studio's runner.
 
+**Wiiscotch** is a Nintendo Wii fork of Butterscotch, bringing GameMaker games to the Wii console using libogc and GX.
+
 **NOTE:** This is a homebrew project.
 
 ## Game Compatibility
 
-Wiiscotch's goal is to be able to have Undertale v1.08 (GameMaker: Studio 1.4.1804, Bytecode Version 16) fully playable. But we do want to support more GameMaker: Studio games in the future too!
+Wiiscotch inherits Butterscotch's goal to be able to have Undertale v1.08 (GameMaker: Studio 1.4.1804, Bytecode Version 16) fully playable. But we do want to support more GameMaker: Studio games in the future too!
 
 While our target is Undertale v1.08, that doesn't mean that other games CAN'T run in Wiiscotch! Because Wiiscotch is a runner and not a Undertale port/remake, you CAN run other GameMaker: Studio games with it and, as long as the game is compiled with GameMaker: Studio 1.4.1804 and they only use GML variables and functions that Wiiscotch supports, it should work fine.
 
@@ -36,6 +38,42 @@ Of course, there are exceptions that break game compatibility altogether:
 * Nintendo Wii (libogc, GX)
 * ...and maybe more in the future!
 
+## How to Play GameMaker Games
+
+To play a GameMaker: Studio game with Wiiscotch, you need:
+
+1. **A compatible game**: The game must be compiled with GameMaker: Studio 1.4.1804 (bytecode version 16) and must NOT use YYC or GMRT.
+2. **The `data.win` file**: Extract this from your game's installation directory or game files.
+3. **Wiiscotch binary**: Build Wiiscotch for your target platform (see [Building Wiiscotch](#building-wiiscotch)).
+
+### Running on Desktop (Linux/Windows)
+
+```bash
+./wiiscotch /path/to/data.win
+```
+
+Or with additional options:
+
+```bash
+./wiiscotch --debug /path/to/data.win
+```
+
+### Running on PlayStation 2
+
+1. Copy your `data.win` file to a USB drive or memory card
+2. Launch Wiiscotch from uLaunchELF or your preferred homebrew launcher
+3. Navigate to the `data.win` file location
+
+### Running on Nintendo Wii
+
+1. Copy your `data.win` file to your SD card (e.g., in `/apps/wiiscotch/`)
+2. Copy the `boot.dol` to `/apps/wiiscotch/boot.dol` on your SD card
+3. Launch Wiiscotch from the Homebrew Channel
+4. The runner will look for `data.win` in the same directory as the application
+
+> [!NOTE]
+> For Wii, ensure your `data.win` file is placed in the same folder as `boot.dol` on your SD card for automatic loading.
+
 ## Building Wiiscotch
 
 ### GLFW (Desktop)
@@ -48,7 +86,7 @@ make
 
 If you are using CLion, set the platform in `Settings` > `Build, Execution, Deployment` > `CMake` and add `-DPLATFORM=glfw`
 
-Then run Wiiscotch with `./Wiiscotch /path/to/data.win`!
+Then run Wiiscotch with `./wiiscotch /path/to/data.win`!
 
 ### PlayStation 2
 
