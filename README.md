@@ -216,12 +216,13 @@ Fast forward ten years, and while I was toying around with Claude Code I've thou
 
 ...and that's when I found out that we were onto something here and that the idea could be viable. And that's when I started learning C and rewriting the runner to be cross-platform.
 
-Wiiscotch is not "vibe coded", that is, I didn't just let Claude go wild and implement everything. This does not work, and anyone that says that "vibe coding" works and will replace all developers is lying, or they aren't skilled enough to know what good code looks like, or they are rich and have a lot of money to spend while Claude keeps getting stuck trying to resolve bugs that they don't know how to fix like [it was a infinite monkey theorem](https://en.wikipedia.org/wiki/Infinite_monkey_theorem).
+Wiiscotch is "vibe coded", that is, I did let Qwen Coder implement everything (and will be properly tested). This will work (for now), and anyone that says that "vibe coding" works and will replace all developers are lying, or they aren't skilled enough to know what good code looks like, or they are rich and have a lot of money to spend while Claude keeps getting stuck trying to resolve bugs that they don't know how to fix like [it was a infinite monkey theorem](https://en.wikipedia.org/wiki/Infinite_monkey_theorem).
 
-Wiiscotch is made with an "agentic engineering" approach. I did use Claude Code to implement a lot of things in Wiiscotch, but every line of code was reviewed and refactored by me to polish the code that Claude made (Claude LOVES creating duplicate code and creating some non-sensical things).
+Wiiscotch is made with an "agentic engineering" approach. I did use Qwen Coder to implement a lot of things in Wiiscotch, but every time this is tested on a real authentic Nintendo Wii hardware and a problem will be send as a feedback.
 
-That does not mean that Wiiscotch's code is good however, I'm not a C developer (JVM my beloved) and I know just enough C to be dangerous (who doesn't like a use after free crash??) so some of the code decisions are questionable at best, harmful at worst. That's why if you see the codebase, it really feels like it is a Java developer trying to create a C application.
+That does not mean that Wiiscotch's code is good however, I'm not a C developer (Python my beloved) and I know just enough C to be dangerous (who doesn't like a use after free crash??) so some of the code decisions are questionable at best, harmful at worst. That's why if you see the codebase, it really feels like it is a Java developer trying to create a C application.
 
+## The tips from the original project itself.
 That said, here are some tips and tricks with using Claude Code for projects like this:
 
 * The project itself, when you think about it, is somewhat trivial, which is why Claude excelled on it.
