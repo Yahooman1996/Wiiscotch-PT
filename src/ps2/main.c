@@ -446,17 +446,6 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // Parse deferDrawToAfterAllSteps from CONFIG.JSN
-    // When true, Runner_draw runs once after all catch-up Runner_step calls (old behavior) instead of running immediately after each Runner_step (new behavior)
-    bool deferDrawToAfterAllSteps = false;
-    JsonValue* deferDrawVal = JsonReader_getObject(configRoot, "deferDrawToAfterAllSteps");
-    if (deferDrawVal != nullptr) {
-        deferDrawToAfterAllSteps = JsonReader_getBool(deferDrawVal);
-        if (deferDrawToAfterAllSteps) {
-            printf("CONFIG.JSN: deferDrawToAfterAllSteps = true (draw once after all steps)\n");
-        }
-    }
-
     // Parse controllerMappings from CONFIG.JSN
     JsonValue* controllerMappingsObj = JsonReader_getObject(configRoot, "controllerMappings");
     if (controllerMappingsObj != nullptr && JsonReader_isObject(controllerMappingsObj)) {
@@ -521,23 +510,9 @@ int main(int argc, char* argv[]) {
     StartTimerSystemTime();
 
     // ===[ Main Loop ]===
-    float lastFrameTimeMs = 0.0f;
-    u64 lastVsyncTime = GetTimerSystemTime();
-    double accumulator = 0.0; // seconds of game time accumulated
     bool debugOverlayEnabled = JsonReader_getBool(JsonReader_getObject(configRoot, "debugOverlayEnabled"));
-
-    // FPS tracking: count rendered frames (screen flips) over a 1-second window
-    int renderFpsCounter = 0;
-    int displayedRenderFps = 0;
-    u64 fpsTimerStart = GetTimerSystemTime();
-
     while (!runner->shouldExit) {
         u64 frameStartTime = GetTimerSystemTime();
-
-        // Calculate delta time since last vsync
-        double deltaTime = (double) (frameStartTime - lastVsyncTime) / (double) kBUSCLK;
-        lastVsyncTime = frameStartTime;
-
         // ===[ Poll Controller (always poll every vsync) ]===
         // NOTE: We do NOT call RunnerKeyboard_beginFrame here! Pressed/released edges accumulate across vsyncs so that quick taps on non-game-frame
         // vsyncs are not lost
@@ -568,7 +543,7 @@ int main(int argc, char* argv[]) {
             prevButtons = buttons;
         }
 
-        // R2 removes speed cap (run at full vsync rate)
+        // R2 removes speed cap (ignore waiting for vsync)
         bool speedCapRemoved = (padResult != 0) && ((buttons & PAD_R2) == 0);
 
         // Go to next room
@@ -606,215 +581,113 @@ int main(int argc, char* argv[]) {
             printf("Changed global.interact [%d] value!\n", interactVarId);
         }
 
-        // ===[ Game Logic (accumulator-based frame pacing) ]===
+        // ===[ Game Logic ]===
         uint32_t roomSpeed = runner->currentRoom->speed;
-        // TODO: In the future, we'll need to check if roomSpeed == 0 and, if it is, use the game's default FPS for GameMaker: Studio 2+ games!
-        double targetFrameTime = (roomSpeed > 0) ? (1.0 / roomSpeed) : (1.0 / 60.0);
 
-        accumulator += deltaTime;
+        Runner_step(runner);
 
-        // Cap accumulator to prevent spiral of death (max 4 game frames per vsync)
-        double maxAccumulator = targetFrameTime * 4.0;
-        if (accumulator > maxAccumulator) {
-            accumulator = maxAccumulator;
+        gsKit_clear(gsGlobal, GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00));
+
+        renderer->vtable->beginFrame(renderer, gameW, gameH, 640, 448);
+
+        // Clear with room background color
+        if (runner->drawBackgroundColor) {
+            uint8_t bgR = BGR_R(runner->backgroundColor);
+            uint8_t bgG = BGR_G(runner->backgroundColor);
+            uint8_t bgB = BGR_B(runner->backgroundColor);
+            u64 bgColor = GS_SETREG_RGBAQ(bgR, bgG, bgB, 0x80, 0x00);
+            gsKit_prim_sprite(gsGlobal, 0, 0, 640, 448, 0, bgColor);
         }
 
-        // If R2 is held, force at least one game frame per vsync
-        if (speedCapRemoved) {
-            if (targetFrameTime > accumulator) {
-                accumulator = targetFrameTime;
-            }
-        }
+        // Render views
+        Room* activeRoom = runner->currentRoom;
+        bool anyViewRendered = false;
 
-        int gameFramesRan = 0;
-        while (accumulator >= targetFrameTime) {
-            // Clear pressed/released before 2nd+ steps so press events don't fire multiple times when catching up
-            if (gameFramesRan > 0)
-                RunnerKeyboard_beginFrame(runner->keyboard);
+        bool viewsEnabled = (activeRoom->flags & 1) != 0;
 
-            Runner_step(runner);
+        if (viewsEnabled) {
+            repeat(8, vi) {
+                if (!activeRoom->views[vi].enabled) continue;
 
-            if (!deferDrawToAfterAllSteps) {
-                gsKit_clear(gsGlobal, GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00));
+                int32_t viewX = activeRoom->views[vi].viewX;
+                int32_t viewY = activeRoom->views[vi].viewY;
+                int32_t viewW = activeRoom->views[vi].viewWidth;
+                int32_t viewH = activeRoom->views[vi].viewHeight;
+                int32_t portX = activeRoom->views[vi].portX;
+                int32_t portY = activeRoom->views[vi].portY;
+                int32_t portW = activeRoom->views[vi].portWidth;
+                int32_t portH = activeRoom->views[vi].portHeight;
+                float viewAngle = runner->viewAngles[vi];
 
-                renderer->vtable->beginFrame(renderer, gameW, gameH, 640, 448);
+                runner->viewCurrent = (int32_t) vi;
+                renderer->vtable->beginView(renderer, viewX, viewY, viewW, viewH, portX, portY, portW, portH, viewAngle);
 
-                // Clear with room background color
-                if (runner->drawBackgroundColor) {
-                    uint8_t bgR = BGR_R(runner->backgroundColor);
-                    uint8_t bgG = BGR_G(runner->backgroundColor);
-                    uint8_t bgB = BGR_B(runner->backgroundColor);
-                    u64 bgColor = GS_SETREG_RGBAQ(bgR, bgG, bgB, 0x80, 0x00);
-                    gsKit_prim_sprite(gsGlobal, 0, 0, 640, 448, 0, bgColor);
-                }
-
-                // Render views
-                Room* activeRoom = runner->currentRoom;
-                bool anyViewRendered = false;
-
-                bool viewsEnabled = (activeRoom->flags & 1) != 0;
-
-                if (viewsEnabled) {
-                    repeat(8, vi) {
-                        if (!activeRoom->views[vi].enabled) continue;
-
-                        int32_t viewX = activeRoom->views[vi].viewX;
-                        int32_t viewY = activeRoom->views[vi].viewY;
-                        int32_t viewW = activeRoom->views[vi].viewWidth;
-                        int32_t viewH = activeRoom->views[vi].viewHeight;
-                        int32_t portX = activeRoom->views[vi].portX;
-                        int32_t portY = activeRoom->views[vi].portY;
-                        int32_t portW = activeRoom->views[vi].portWidth;
-                        int32_t portH = activeRoom->views[vi].portHeight;
-                        float viewAngle = runner->viewAngles[vi];
-
-                        runner->viewCurrent = (int32_t) vi;
-                        renderer->vtable->beginView(renderer, viewX, viewY, viewW, viewH, portX, portY, portW, portH, viewAngle);
-
-                        Runner_draw(runner);
-
-                        renderer->vtable->endView(renderer);
-                        anyViewRendered = true;
-                    }
-                }
-
-                if (!anyViewRendered) {
-                    // No views enabled: render with default full-screen view
-                    runner->viewCurrent = 0;
-                    renderer->vtable->beginView(renderer, 0, 0, gameW, gameH, 0, 0, gameW, gameH, 0.0f);
-                    Runner_draw(runner);
-                    renderer->vtable->endView(renderer);
-                }
-
-                runner->viewCurrent = 0;
-
-                renderer->vtable->endFrame(renderer);
-            }
-
-            accumulator -= targetFrameTime;
-            gameFramesRan++;
-
-            // For intermediate catch-up frames, flush the GS queue so it doesn't accumulate
-            // (the back buffer will be overwritten by the next iteration's rendering anyway)
-            if (!deferDrawToAfterAllSteps && accumulator >= targetFrameTime) {
-                gsKit_queue_exec(gsGlobal);
-            }
-        }
-
-        // When deferDrawToAfterAllSteps is enabled, render once after all catch-up steps
-        if (deferDrawToAfterAllSteps && gameFramesRan > 0) {
-            gsKit_clear(gsGlobal, GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00));
-
-            renderer->vtable->beginFrame(renderer, gameW, gameH, 640, 448);
-
-            // Clear with room background color
-            if (runner->drawBackgroundColor) {
-                uint8_t bgR = BGR_R(runner->backgroundColor);
-                uint8_t bgG = BGR_G(runner->backgroundColor);
-                uint8_t bgB = BGR_B(runner->backgroundColor);
-                u64 bgColor = GS_SETREG_RGBAQ(bgR, bgG, bgB, 0x80, 0x00);
-                gsKit_prim_sprite(gsGlobal, 0, 0, 640, 448, 0, bgColor);
-            }
-
-            // Render views
-            Room* activeRoom = runner->currentRoom;
-            bool anyViewRendered = false;
-
-            bool viewsEnabled = (activeRoom->flags & 1) != 0;
-
-            if (viewsEnabled) {
-                repeat(8, vi) {
-                    if (!activeRoom->views[vi].enabled) continue;
-
-                    int32_t viewX = activeRoom->views[vi].viewX;
-                    int32_t viewY = activeRoom->views[vi].viewY;
-                    int32_t viewW = activeRoom->views[vi].viewWidth;
-                    int32_t viewH = activeRoom->views[vi].viewHeight;
-                    int32_t portX = activeRoom->views[vi].portX;
-                    int32_t portY = activeRoom->views[vi].portY;
-                    int32_t portW = activeRoom->views[vi].portWidth;
-                    int32_t portH = activeRoom->views[vi].portHeight;
-                    float viewAngle = runner->viewAngles[vi];
-
-                    runner->viewCurrent = (int32_t) vi;
-                    renderer->vtable->beginView(renderer, viewX, viewY, viewW, viewH, portX, portY, portW, portH, viewAngle);
-
-                    Runner_draw(runner);
-
-                    renderer->vtable->endView(renderer);
-                    anyViewRendered = true;
-                }
-            }
-
-            if (!anyViewRendered) {
-                // No views enabled: render with default full-screen view
-                runner->viewCurrent = 0;
-                renderer->vtable->beginView(renderer, 0, 0, gameW, gameH, 0, 0, gameW, gameH, 0.0f);
                 Runner_draw(runner);
+
                 renderer->vtable->endView(renderer);
+                anyViewRendered = true;
             }
-
-            runner->viewCurrent = 0;
-
-            renderer->vtable->endFrame(renderer);
         }
+
+        if (!anyViewRendered) {
+            // No views enabled: render with default full-screen view
+            runner->viewCurrent = 0;
+            renderer->vtable->beginView(renderer, 0, 0, gameW, gameH, 0, 0, gameW, gameH, 0.0f);
+            Runner_draw(runner);
+            renderer->vtable->endView(renderer);
+        }
+
+        runner->viewCurrent = 0;
+
+        renderer->vtable->endFrame(renderer);
+
+        // Clear pressed/released edges after both Step and Draw have consumed input
+        // This MUST be after Runner_draw because games CAN handle input in Draw events (e.g. Undertale's naming screen)
+        RunnerKeyboard_beginFrame(runner->keyboard);
 
         // Update audio system (gain fading, stream to audsrv)
-        float dt = (float) deltaTime;
+        float dt = 1.0f / (float) roomSpeed;
         if (0.0f > dt) dt = 0.0f;
         if (dt > 0.1f) dt = 0.1f;
         runner->audioSystem->vtable->update(runner->audioSystem, dt);
 
-        // Update FPS counter (counts actual rendered frames, not game logic steps)
-        if (gameFramesRan > 0) {
-            renderFpsCounter++;
-        }
-        u64 fpsElapsed = frameStartTime - fpsTimerStart;
-        if (fpsElapsed >= (u64) kBUSCLK) {
-            displayedRenderFps = renderFpsCounter;
-            renderFpsCounter = 0;
-            fpsTimerStart = frameStartTime;
-        }
+        u64 runnerEndTime = GetTimerSystemTime();
+        u64 duration = runnerEndTime - frameStartTime;
+        float tickTime = (float) duration / (float) (kBUSCLK / 1000);
 
-        if (gameFramesRan > 0) {
-            // Measure frame time BEFORE flipping
-            u64 frameEndTime = GetTimerSystemTime();
-            lastFrameTimeMs = (float) (frameEndTime - frameStartTime) / (float) (kBUSCLK / 1000);
+        // ===[ Debug Overlay ]===
+        if (debugOverlayEnabled) {
+            u64 debugColor = GS_SETREG_RGBAQ(0xFF, 0xFF, 0xFF, 0x80, 0x00);
+            // sbrk(0) returns the actual heap frontier; true free = top of RAM - sbrk frontier
+            void* heapTop = sbrk(0);
+            int32_t freeBytes = MAX_MEMORY_BYTES - (int32_t) (uintptr_t) heapTop;
 
-            // ===[ Debug Overlay ]===
-            if (debugOverlayEnabled) {
-                u64 debugColor = GS_SETREG_RGBAQ(0xFF, 0xFF, 0xFF, 0x80, 0x00);
-                // sbrk(0) returns the actual heap frontier; true free = top of RAM - sbrk frontier
-                void* heapTop = sbrk(0);
-                int32_t freeBytes = MAX_MEMORY_BYTES - (int32_t) (uintptr_t) heapTop;
+            char debugText[256];
+            uint32_t vramFreeBytes = GS_VRAM_SIZE - gsGlobal->CurrentPointer;
 
-                char debugText[256];
-                uint32_t vramFreeBytes = GS_VRAM_SIZE - gsGlobal->CurrentPointer;
-
-                // Count atlases loaded in VRAM and EE RAM cache
-                GsRenderer* gsRenderer = (GsRenderer*) renderer;
-                uint32_t vramAtlasCount = 0;
-                uint32_t eeramAtlasCount = 0;
-                repeat(gsRenderer->atlasCount, ai) {
-                    if (gsRenderer->atlasToChunk[ai] >= 0) vramAtlasCount++;
-                    if (gsRenderer->eeCacheEntries[ai].atlasId >= 0) eeramAtlasCount++;
-                }
-
-                snprintf(debugText, sizeof(debugText), "FPS: %d\nTick: %.2fms\nFree: %d bytes\nVRAM Free: %lu bytes\nRoom Speed: %u%s\nAtlas: (%u, %u, %u)", displayedRenderFps, lastFrameTimeMs, freeBytes, (unsigned long) vramFreeBytes, roomSpeed, speedCapRemoved ? " [UNCAPPED]" : "", vramAtlasCount, eeramAtlasCount, gsRenderer->atlasCount);
-                gsKit_fontm_print_scaled(gsGlobal, gsFontM, 10.0f, 10.0f, 10, 0.6f, debugColor, debugText);
+            // Count atlases loaded in VRAM and EE RAM cache
+            GsRenderer* gsRenderer = (GsRenderer*) renderer;
+            uint32_t vramAtlasCount = 0;
+            uint32_t eeramAtlasCount = 0;
+            repeat(gsRenderer->atlasCount, ai) {
+                if (gsRenderer->atlasToChunk[ai] >= 0) vramAtlasCount++;
+                if (gsRenderer->eeCacheEntries[ai].atlasId >= 0) eeramAtlasCount++;
             }
 
-            // Clear accumulated input after both Step and Draw events have consumed it, so edges don't re-fire on the next game frame
-            // This MUST be after Runner_draw because games CAN handle input in Draw events (example: Undertale's naming screen)
-            RunnerKeyboard_beginFrame(runner->keyboard);
+            snprintf(debugText, sizeof(debugText), "Tick: %.2fms\nFree: %d bytes\nVRAM Free: %lu bytes\nRoom Speed: %u%s\nAtlas: (%u, %u, %u)", tickTime, freeBytes, (unsigned long) vramFreeBytes, roomSpeed, speedCapRemoved ? " [UNCAPPED]" : "", vramAtlasCount, eeramAtlasCount, gsRenderer->atlasCount);
+            gsKit_fontm_print_scaled(gsGlobal, gsFontM, 10.0f, 10.0f, 10, 0.6f, debugColor, debugText);
+        }
 
-            // Execute draw queue and flip buffers
-            gsKit_queue_exec(gsGlobal);
-            gsKit_sync_flip(gsGlobal);
-        } else {
-            // No game frame ran, just wait for vsync without flipping
-            // (flipping would show the other buffer which has stale/black content)
-            gsKit_vsync_wait();
+        // Execute draw queue and flip buffers
+        gsKit_queue_exec(gsGlobal);
+        gsKit_sync_flip(gsGlobal);
+
+        // Busy-wait until enough time has elapsed for this frame if needed
+        if (!speedCapRemoved && roomSpeed > 0) {
+            u64 targetTicks = kBUSCLK / roomSpeed;
+            while (targetTicks > GetTimerSystemTime() - frameStartTime) {
+                // spin spin spin!
+            }
         }
     }
 
