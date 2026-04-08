@@ -1712,6 +1712,298 @@ static RValue builtinPlaceFree(VMContext* ctx, RValue* args, int32_t argCount) {
     return RValue_makeBool(free);
 }
 
+// place_empty(x, y) - returns true if no instance overlaps at position (x, y), checking ALL instances (not just solid)
+static bool placeEmptyAt(Runner* runner, Instance* caller, GMLReal testX, GMLReal testY) {
+    GMLReal savedX = caller->x;
+    GMLReal savedY = caller->y;
+    caller->x = testX;
+    caller->y = testY;
+
+    InstanceBBox callerBBox = Collision_computeBBox(runner->dataWin, caller);
+    bool empty = true;
+
+    if (callerBBox.valid) {
+        int32_t instanceCount = (int32_t) arrlen(runner->instances);
+        repeat(instanceCount, i) {
+            Instance* other = runner->instances[i];
+            if (!other->active || other == caller) continue;
+
+            InstanceBBox otherBBox = Collision_computeBBox(runner->dataWin, other);
+            if (!otherBBox.valid) continue;
+
+            if (Collision_instancesOverlapPrecise(runner->dataWin, caller, other, callerBBox, otherBBox)) {
+                empty = false;
+                break;
+            }
+        }
+    }
+
+    caller->x = savedX;
+    caller->y = savedY;
+    return empty;
+}
+
+// placeFreeAt - returns true if no SOLID instance overlaps at position (x, y)
+static bool placeFreeAt(Runner* runner, Instance* caller, GMLReal testX, GMLReal testY) {
+    GMLReal savedX = caller->x;
+    GMLReal savedY = caller->y;
+    caller->x = testX;
+    caller->y = testY;
+
+    InstanceBBox callerBBox = Collision_computeBBox(runner->dataWin, caller);
+    bool free = true;
+
+    if (callerBBox.valid) {
+        int32_t instanceCount = (int32_t) arrlen(runner->instances);
+        repeat(instanceCount, i) {
+            Instance* other = runner->instances[i];
+            if (!other->active || !other->solid || other == caller) continue;
+
+            InstanceBBox otherBBox = Collision_computeBBox(runner->dataWin, other);
+            if (!otherBBox.valid) continue;
+
+            if (Collision_instancesOverlapPrecise(runner->dataWin, caller, other, callerBBox, otherBBox)) {
+                free = false;
+                break;
+            }
+        }
+    }
+
+    caller->x = savedX;
+    caller->y = savedY;
+    return free;
+}
+
+// noCollisionWithObject - returns true if no instance of the given object overlaps at position (x, y)
+static bool noCollisionWithObject(Runner* runner, Instance* caller, GMLReal testX, GMLReal testY, int32_t objIndex) {
+    GMLReal savedX = caller->x;
+    GMLReal savedY = caller->y;
+    caller->x = testX;
+    caller->y = testY;
+
+    InstanceBBox callerBBox = Collision_computeBBox(runner->dataWin, caller);
+    bool free = true;
+
+    if (callerBBox.valid) {
+        int32_t instanceCount = (int32_t) arrlen(runner->instances);
+        repeat(instanceCount, i) {
+            Instance* other = runner->instances[i];
+            if (!other->active || other == caller) continue;
+            if (!Collision_matchesTarget(runner->dataWin, other, objIndex)) continue;
+
+            InstanceBBox otherBBox = Collision_computeBBox(runner->dataWin, other);
+            if (!otherBBox.valid) continue;
+
+            if (Collision_instancesOverlapPrecise(runner->dataWin, caller, other, callerBBox, otherBBox)) {
+                free = false;
+                break;
+            }
+        }
+    }
+
+    caller->x = savedX;
+    caller->y = savedY;
+    return free;
+}
+
+// Tests whether a position is free for the given collision mode
+// objIndex == INSTANCE_ALL with checkall=false: check solid only (place_free)
+// objIndex == INSTANCE_ALL with checkall=true: check all instances (place_empty)
+// objIndex == specific object/instance: check that specific target (instance_place == noone)
+static bool mpTestFree(Runner* runner, Instance* inst, GMLReal x, GMLReal y, int32_t objIndex, bool checkall) {
+    if (objIndex == INSTANCE_ALL) {
+        if (checkall) {
+            return placeEmptyAt(runner, inst, x, y);
+        } else {
+            return placeFreeAt(runner, inst, x, y);
+        }
+    } else {
+        return noCollisionWithObject(runner, inst, x, y, objIndex);
+    }
+}
+
+// place_empty(x, y) - returns true if no instance (solid or not) overlaps at position (x, y)
+static RValue builtinPlaceEmpty(VMContext* ctx, RValue* args, int32_t argCount) {
+    if (2 > argCount) return RValue_makeBool(true);
+
+    Runner* runner = (Runner*) ctx->runner;
+    Instance* caller = (Instance*) ctx->currentInstance;
+    if (caller == nullptr) return RValue_makeBool(true);
+
+    GMLReal testX = RValue_toReal(args[0]);
+    GMLReal testY = RValue_toReal(args[1]);
+    return RValue_makeBool(placeEmptyAt(runner, caller, testX, testY));
+}
+
+// ===[ Motion Planning ]===
+
+static RValue builtinMpLinearStepCommon(VMContext* ctx, GMLReal goalX, GMLReal goalY, GMLReal stepsize, int32_t objIndex, bool checkall) {
+    Runner* runner = (Runner*) ctx->runner;
+    Instance* inst = (Instance*) ctx->currentInstance;
+    if (inst == nullptr) return RValue_makeBool(false);
+
+    // Check whether already at the correct position
+    if (inst->x == (float) goalX && inst->y == (float) goalY) return RValue_makeBool(true);
+
+    // Check whether close enough for a single step
+    GMLReal dx = inst->x - goalX;
+    GMLReal dy = inst->y - goalY;
+    GMLReal dist = GMLReal_sqrt(dx * dx + dy * dy);
+
+    GMLReal newX, newY;
+    bool reached;
+    if (dist <= stepsize) {
+        newX = goalX;
+        newY = goalY;
+        reached = true;
+    } else {
+        newX = inst->x + stepsize * (goalX - inst->x) / dist;
+        newY = inst->y + stepsize * (goalY - inst->y) / dist;
+        reached = false;
+    }
+
+    // Check whether free
+    if (!mpTestFree(runner, inst, newX, newY, objIndex, checkall)) return RValue_makeBool(reached);
+
+    inst->direction = (float) (GMLReal_atan2(-(newY - inst->y), newX - inst->x) * (180.0 / M_PI));
+    inst->x = (float) newX;
+    inst->y = (float) newY;
+    return RValue_makeBool(reached);
+}
+
+// mp_linear_step(x, y, stepsize, checkall)
+static RValue builtinMpLinearStep(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
+    GMLReal goalX = RValue_toReal(args[0]);
+    GMLReal goalY = RValue_toReal(args[1]);
+    GMLReal stepsize = RValue_toReal(args[2]);
+    bool checkall = RValue_toBool(args[3]);
+    return builtinMpLinearStepCommon(ctx, goalX, goalY, stepsize, INSTANCE_ALL, checkall);
+}
+
+// mp_linear_step_object(x, y, stepsize, obj)
+static RValue builtinMpLinearStepObject(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
+    GMLReal goalX = RValue_toReal(args[0]);
+    GMLReal goalY = RValue_toReal(args[1]);
+    GMLReal stepsize = RValue_toReal(args[2]);
+    int32_t obj = RValue_toInt32(args[3]);
+    return builtinMpLinearStepCommon(ctx, goalX, goalY, stepsize, obj, true);
+}
+
+static GMLReal mpPotMaxrot = 30.0;
+static GMLReal mpPotStep = 10.0;
+static GMLReal mpPotAhead = 3.0;
+static bool mpPotOnSpot = true;
+
+// Computes the shortest angular difference between two directions (result 0-180)
+static GMLReal mpDiffDir(GMLReal dir1, GMLReal dir2) {
+    while (dir1 <= 0.0) dir1 += 360.0;
+    while (dir1 >= 360.0) dir1 -= 360.0;
+    while (dir2 < 0.0) dir2 += 360.0;
+    while (dir2 >= 360.0) dir2 -= 360.0;
+    GMLReal result = dir2 - dir1;
+    if (result < 0.0) result = -result;
+    if (result > 180.0) result = 360.0 - result;
+    return result;
+}
+
+// Tries a step in the indicated direction; returns whether successful
+// If successful, moves the instance and sets its direction
+static bool mpTryDir(GMLReal dir, Runner* runner, Instance* inst, GMLReal speed, int32_t objIndex, bool checkall) {
+    // See whether angle is acceptable
+    if (mpDiffDir(dir, inst->direction) > mpPotMaxrot) return false;
+
+    GMLReal dirRad = dir * (M_PI / 180.0);
+    GMLReal cosDir = GMLReal_cos(dirRad);
+    GMLReal sinDir = GMLReal_sin(dirRad);
+
+    // Check position a bit ahead
+    GMLReal aheadX = inst->x + speed * mpPotAhead * cosDir;
+    GMLReal aheadY = inst->y - speed * mpPotAhead * sinDir;
+    if (!mpTestFree(runner, inst, aheadX, aheadY, objIndex, checkall)) return false;
+
+    // Check next position
+    GMLReal nextX = inst->x + speed * cosDir;
+    GMLReal nextY = inst->y - speed * sinDir;
+    if (!mpTestFree(runner, inst, nextX, nextY, objIndex, checkall)) return false;
+
+    // OK, so set the position
+    inst->direction = (float) dir;
+    inst->x = (float) nextX;
+    inst->y = (float) nextY;
+    return true;
+}
+
+static RValue builtinMpPotentialStepCommon(VMContext* ctx, GMLReal goalX, GMLReal goalY, GMLReal stepsize, int32_t objIndex, bool checkall) {
+    Runner* runner = (Runner*) ctx->runner;
+    Instance* inst = (Instance*) ctx->currentInstance;
+    if (inst == nullptr) return RValue_makeBool(false);
+
+    // Check whether already at the correct position
+    if (inst->x == (float) goalX && inst->y == (float) goalY) return RValue_makeBool(true);
+
+    // Check whether close enough for a single step
+    GMLReal dx = inst->x - goalX;
+    GMLReal dy = inst->y - goalY;
+    GMLReal dist = GMLReal_sqrt(dx * dx + dy * dy);
+    if (stepsize >= dist) {
+        if (mpTestFree(runner, inst, goalX, goalY, objIndex, checkall)) {
+            GMLReal dir = GMLReal_atan2(-(goalY - inst->y), goalX - inst->x) * (180.0 / M_PI);
+            inst->direction = (float) dir;
+            inst->x = (float) goalX;
+            inst->y = (float) goalY;
+        }
+        return RValue_makeBool(true);
+    }
+
+    // Try directions as much as possible towards the goal
+    GMLReal goaldir = GMLReal_atan2(-(goalY - inst->y), goalX - inst->x) * (180.0 / M_PI);
+    GMLReal curdir = 0.0;
+    while (180.0 > curdir) {
+        if (mpTryDir(goaldir - curdir, runner, inst, stepsize, objIndex, checkall)) return RValue_makeBool(false);
+        if (mpTryDir(goaldir + curdir, runner, inst, stepsize, objIndex, checkall)) return RValue_makeBool(false);
+        curdir += mpPotStep;
+    }
+
+    // If we did not succeed, a local minima was reached
+    // To avoid the instance getting stuck we rotate on the spot
+    if (mpPotOnSpot) {
+        inst->direction = (float) (inst->direction + mpPotMaxrot);
+    }
+
+    return RValue_makeBool(false);
+}
+
+// mp_potential_step(x, y, stepsize, checkall)
+static RValue builtinMpPotentialStep(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
+    GMLReal goalX = RValue_toReal(args[0]);
+    GMLReal goalY = RValue_toReal(args[1]);
+    GMLReal stepsize = RValue_toReal(args[2]);
+    bool checkall = RValue_toBool(args[3]);
+    return builtinMpPotentialStepCommon(ctx, goalX, goalY, stepsize, INSTANCE_ALL, checkall);
+}
+
+// mp_potential_step_object(x, y, stepsize, obj)
+static RValue builtinMpPotentialStepObject(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
+    GMLReal goalX = RValue_toReal(args[0]);
+    GMLReal goalY = RValue_toReal(args[1]);
+    GMLReal stepsize = RValue_toReal(args[2]);
+    int32_t obj = RValue_toInt32(args[3]);
+    return builtinMpPotentialStepCommon(ctx, goalX, goalY, stepsize, obj, true);
+}
+
+// mp_potential_settings(maxrot, rotstep, ahead, onspot)
+static RValue builtinMpPotentialSettings(MAYBE_UNUSED VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
+    GMLReal maxrot = RValue_toReal(args[0]);
+    GMLReal rotstep = RValue_toReal(args[1]);
+    GMLReal ahead = RValue_toReal(args[2]);
+    bool onspot = RValue_toBool(args[3]);
+    mpPotMaxrot = (maxrot < 1.0) ? 1.0 : maxrot;
+    mpPotStep = (rotstep < 1.0) ? 1.0 : rotstep;
+    mpPotAhead = (ahead < 1.0) ? 1.0 : ahead;
+    mpPotOnSpot = onspot;
+    return RValue_makeReal(0.0);
+}
+
 // ===[ STUBBED FUNCTIONS ]===
 
 #define STUB_RETURN_ZERO(name) \
@@ -4770,6 +5062,14 @@ void VMBuiltins_registerAll(bool isGMS2) {
     registerBuiltin("collision_point", builtinCollisionPoint);
     registerBuiltin("instance_position", builtinInstancePosition);
     registerBuiltin("place_free", builtinPlaceFree);
+    registerBuiltin("place_empty", builtinPlaceEmpty);
+
+    // Motion planning
+    registerBuiltin("mp_linear_step", builtinMpLinearStep);
+    registerBuiltin("mp_linear_step_object", builtinMpLinearStepObject);
+    registerBuiltin("mp_potential_step", builtinMpPotentialStep);
+    registerBuiltin("mp_potential_step_object", builtinMpPotentialStepObject);
+    registerBuiltin("mp_potential_settings", builtinMpPotentialSettings);
 
     // Tile layers
     registerBuiltin("tile_layer_hide", builtinTileLayerHide);
