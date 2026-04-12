@@ -12,6 +12,10 @@
 
 #include "stb_ds.h"
 
+// Maximum number of local variables per code entry (stack-allocated arrays in VM_executeCode/VM_callCodeIndex)
+#define MAX_CODE_LOCALS 64
+#define MAX_ARRAY_ALIAS_HOPS 16
+
 // ===[ Stack Operations ]===
 
 #ifndef DISABLE_VM_TRACING
@@ -204,8 +208,6 @@ static void arrayMapSet(ArrayMapEntry** map, int32_t varID, int32_t arrayIndex, 
 }
 
 // ===[ Array Alias Resolution ]===
-
-#define MAX_ARRAY_ALIAS_HOPS 16
 
 // Follows RVALUE_ARRAY_REF chain in scalar variable slots to find the actual source varID.
 // Returns the resolved varID (which may be the same as the input if no alias exists).
@@ -1906,6 +1908,12 @@ VMContext* VM_create(DataWin* dataWin) {
     ctx->currentEventSubtype = -1;
     ctx->currentEventObjectIndex = -1;
 
+    // Validate that no code entry exceeds MAX_CODE_LOCALS (the VM uses stack-allocated arrays of this size)
+    repeat(dataWin->code.count, i) {
+        CodeEntry* entry = &dataWin->code.entries[i];
+        require(MAX_CODE_LOCALS > entry->localsCount);
+    }
+
     // Build reference lookup maps (file buffer stays read-only)
     patchReferenceOperands(ctx);
 
@@ -2009,7 +2017,8 @@ RValue VM_executeCode(VMContext* ctx, int32_t codeIndex) {
     // Allocate locals
     uint32_t localsCount = code->localsCount;
     if (localsCount == 0) localsCount = 1; // at least 1 slot to avoid nullptr
-    ctx->localVars = safeCalloc(localsCount, sizeof(RValue));
+    RValue localVars[MAX_CODE_LOCALS];
+    ctx->localVars = localVars;
     ctx->localVarCount = localsCount;
     ctx->localArrayMap = nullptr;
     repeat(localsCount, i) {
@@ -2025,7 +2034,6 @@ RValue VM_executeCode(VMContext* ctx, int32_t codeIndex) {
     repeat(ctx->localVarCount, i) {
         RValue_free(&ctx->localVars[i]);
     }
-    free(ctx->localVars);
     ctx->localVars = nullptr;
     ctx->localVarCount = 0;
 
@@ -2053,18 +2061,19 @@ RValue VM_callCodeIndex(VMContext* ctx, int32_t codeIndex, RValue* args, int32_t
     CodeEntry* code = &ctx->dataWin->code.entries[codeIndex];
 
     // Save current frame
-    CallFrame* frame = safeMalloc(sizeof(CallFrame));
-    frame->savedIP = ctx->ip;
-    frame->savedCodeEnd = ctx->codeEnd;
-    frame->savedBytecodeBase = ctx->bytecodeBase;
-    frame->savedLocals = ctx->localVars;
-    frame->savedLocalsCount = ctx->localVarCount;
-    frame->savedCodeName = ctx->currentCodeName;
-    frame->savedLocalArrayMap = ctx->localArrayMap;
-    frame->savedScriptArgs = ctx->scriptArgs;
-    frame->savedScriptArgCount = ctx->scriptArgCount;
-    frame->parent = ctx->callStack;
-    ctx->callStack = frame;
+    CallFrame frame = (CallFrame) {
+        .savedIP = ctx->ip,
+        .savedCodeEnd = ctx->codeEnd,
+        .savedBytecodeBase = ctx->bytecodeBase,
+        .savedLocals = ctx->localVars,
+        .savedLocalsCount = ctx->localVarCount,
+        .savedCodeName = ctx->currentCodeName,
+        .savedLocalArrayMap = ctx->localArrayMap,
+        .savedScriptArgs = ctx->scriptArgs,
+        .savedScriptArgCount = ctx->scriptArgCount,
+        .parent = ctx->callStack,
+    };
+    ctx->callStack = &frame;
     ctx->callDepth++;
 
     // Set up callee
@@ -2074,18 +2083,22 @@ RValue VM_callCodeIndex(VMContext* ctx, int32_t codeIndex, RValue* args, int32_t
     ctx->currentCodeName = code->name;
     ctx->localArrayMap = nullptr;
 
+    // We use fixed-size arrays instead of VLAs because it seems that using multiple VLAs in a single function things get corrupted somehow?
+    // So when you see this MAX_CODE_LOCALS and GML_MAX_ARGUMENTS, you can shake your fist in the air and say "damn you MIPS!!1"
     uint32_t localsCount = code->localsCount;
     if (localsCount == 0) localsCount = 1;
-    ctx->localVars = safeCalloc(localsCount, sizeof(RValue));
+    RValue localVars[MAX_CODE_LOCALS];
+    ctx->localVars = localVars;
     ctx->localVarCount = localsCount;
     repeat(localsCount, i) {
         ctx->localVars[i].type = RVALUE_UNDEFINED;
     }
 
     // Store arguments in scriptArgs (mirrors GMS 1.4's global argument stack)
+    RValue scriptArgs[GML_MAX_ARGUMENTS];
+    ctx->scriptArgs = scriptArgs;
     ctx->scriptArgCount = argCount;
     if (argCount > 0 && args != nullptr) {
-        ctx->scriptArgs = safeMalloc((uint32_t) argCount * sizeof(RValue));
         repeat(argCount, argIdx) {
             RValue argCopy = args[argIdx];
             if (argCopy.type == RVALUE_STRING && argCopy.ownsString && argCopy.string != nullptr) {
@@ -2093,8 +2106,6 @@ RValue VM_callCodeIndex(VMContext* ctx, int32_t codeIndex, RValue* args, int32_t
             }
             ctx->scriptArgs[argIdx] = argCopy;
         }
-    } else {
-        ctx->scriptArgs = nullptr;
     }
 
     // Execute the callee
@@ -2116,7 +2127,6 @@ RValue VM_callCodeIndex(VMContext* ctx, int32_t codeIndex, RValue* args, int32_t
     repeat(ctx->localVarCount, i) {
         RValue_free(&ctx->localVars[i]);
     }
-    free(ctx->localVars);
 
     // Free callee local array map
     RValue_freeAllRValuesInMap(ctx->localArrayMap);
@@ -2126,7 +2136,6 @@ RValue VM_callCodeIndex(VMContext* ctx, int32_t codeIndex, RValue* args, int32_t
     repeat(ctx->scriptArgCount, i) {
         RValue_free(&ctx->scriptArgs[i]);
     }
-    free(ctx->scriptArgs);
 
     ctx->localVars = saved->savedLocals;
     ctx->localVarCount = saved->savedLocalsCount;
@@ -2136,7 +2145,6 @@ RValue VM_callCodeIndex(VMContext* ctx, int32_t codeIndex, RValue* args, int32_t
     ctx->currentCodeName = saved->savedCodeName;
     ctx->callStack = saved->parent;
     ctx->callDepth--;
-    free(saved);
 
     return result;
 }
@@ -2718,14 +2726,6 @@ void VM_free(VMContext* ctx) {
         arrfree(envFrame->instanceList);
         free(envFrame);
         envFrame = parent;
-    }
-
-    // Free any remaining call frames
-    CallFrame* frame = ctx->callStack;
-    while (frame != nullptr) {
-        CallFrame* parent = frame->parent;
-        free(frame);
-        frame = parent;
     }
 
     free(ctx);
