@@ -235,3 +235,12 @@ That said, here are some tips and tricks with using Claude Code for projects lik
 * You still need to know EXACTLY what you want, and know HOW are you going to break down the problem into small pieces. Just like what you already do when programming. If I didn't already have previous knowledge on how the YoYo runner worked, I would've probably said "pls port Undertale for me kthxbye" and that would've probably gone nowhere.
 
 However I still needed to keep an eye out on whatever Qwen Coder was doing if they were trying to fix a non-trivial problem, because if I didn't attempt to nudge it in the right direction, it would go completely off the rails.
+
+
+
+# NOTES
+
+There ARE some problems here to make out here.
+
+* Sometimes Qwen Coder does ACTUALLY nothing to the code.
+* I have to rely on **hopes and dreams** to make it do it right.
