@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 // Keyboard input handling for Wii using libwiikeyboard (part of libogc)
 // Handles USB Keyboard via libwiikeyboard and GameCube/Wii controllers via PAD/WPAD
@@ -13,7 +14,7 @@
 extern Runner* g_runner;  // Global runner instance for accessing keyboard state
 
 // Convert libwiikeyboard keycode to GML key code
-static int32_t convertKeycodeToGml(char key) {
+static int32_t convertKeycodeToGml(uint8_t key) {
     // Direct ASCII characters (printable)
     if (key >= 32 && key <= 126) {
         return key;
@@ -78,12 +79,12 @@ void WiiKeyboard_processInput(uint16_t currentButtons, uint16_t prevButtons) {
     s32 res = KEYBOARD_GetEvent(&ke);
     while (res) {
         if (ke.type == KEYBOARD_PRESSED) {
-            int32_t gmlKey = convertKeycodeToGml(ke.key);
+            int32_t gmlKey = convertKeycodeToGml(ke.keycode);
             if (gmlKey > 0) {
                 RunnerKeyboard_onKeyDown(kb, gmlKey);
             }
         } else if (ke.type == KEYBOARD_RELEASED) {
-            int32_t gmlKey = convertKeycodeToGml(ke.key);
+            int32_t gmlKey = convertKeycodeToGml(ke.keycode);
             if (gmlKey > 0) {
                 RunnerKeyboard_onKeyUp(kb, gmlKey);
             }
@@ -122,12 +123,13 @@ void WiiKeyboard_processInput(uint16_t currentButtons, uint16_t prevButtons) {
     
     // Check for Classic Controller attachment
     WPAD_ScanPads();
-    int32_t expType = WPAD_Expansion(0);
-    bool isClassic = (expType == WPAD_EXP_CLASSIC);
+    struct expansion_t exp;
+    WPAD_Expansion(0, &exp);
+    bool isClassic = (exp.type == WPAD_EXP_CLASSIC);
     
     if (isClassic) {
-        // Classic Controller button mappings
-        static const struct { uint16_t button; int32_t gmlKey; } classicMappings[] = {
+        // Classic Controller button mappings - use u32 for buttons
+        static const struct { u32 button; int32_t gmlKey; } classicMappings[] = {
             { WPAD_CLASSIC_BUTTON_A, 32 },      // Space
             { WPAD_CLASSIC_BUTTON_B, 304 },     // Shift
             { WPAD_CLASSIC_BUTTON_X, 90 },      // Z
@@ -144,8 +146,10 @@ void WiiKeyboard_processInput(uint16_t currentButtons, uint16_t prevButtons) {
             { 0, 0 }
         };
         
-        uint16_t classicPressed = pressed;
-        uint16_t classicReleased = released;
+        // Get WPAD data with correct type
+        WPADData* wdata = WPAD_Data(0);
+        u32 classicPressed = wdata->btns.held & ~wdata->btns.prev;
+        u32 classicReleased = ~wdata->btns.held & wdata->btns.prev;
         
         for (int i = 0; classicMappings[i].button != 0; i++) {
             if (classicPressed & classicMappings[i].button) {
@@ -157,49 +161,49 @@ void WiiKeyboard_processInput(uint16_t currentButtons, uint16_t prevButtons) {
         }
         
         // Handle Classic Controller analog sticks
-        struct WPADData* data = WPAD_Data(0);
-        if (data) {
+        if (wdata) {
             // Left stick
-            if (data->exp.classic.ljs.x < -30) {
+            if (wdata->exp.classic.ljs.x < -30) {
                 RunnerKeyboard_onKeyDown(kb, 276); // Left
-            } else if (data->exp.classic.ljs.x > 30) {
+            } else if (wdata->exp.classic.ljs.x > 30) {
                 RunnerKeyboard_onKeyDown(kb, 275); // Right
             }
             
-            if (data->exp.classic.ljs.y < -30) {
+            if (wdata->exp.classic.ljs.y < -30) {
                 RunnerKeyboard_onKeyDown(kb, 274); // Down
-            } else if (data->exp.classic.ljs.y > 30) {
+            } else if (wdata->exp.classic.ljs.y > 30) {
                 RunnerKeyboard_onKeyDown(kb, 273); // Up
             }
             
             // Right stick
-            if (data->exp.classic.rjs.x < -30) {
+            if (wdata->exp.classic.rjs.x < -30) {
                 RunnerKeyboard_onKeyDown(kb, 276); // Left
-            } else if (data->exp.classic.rjs.x > 30) {
+            } else if (wdata->exp.classic.rjs.x > 30) {
                 RunnerKeyboard_onKeyDown(kb, 275); // Right
             }
             
-            if (data->exp.classic.rjs.y < -30) {
+            if (wdata->exp.classic.rjs.y < -30) {
                 RunnerKeyboard_onKeyDown(kb, 274); // Down
-            } else if (data->exp.classic.rjs.y > 30) {
+            } else if (wdata->exp.classic.rjs.y > 30) {
                 RunnerKeyboard_onKeyDown(kb, 273); // Up
             }
         }
     } else {
         // Handle Nunchuk analog stick if attached
-        int32_t nunchukType = WPAD_Expansion(0);
-        if (nunchukType == WPAD_EXP_NUNCHUK) {
-            struct WPADData* data = WPAD_Data(0);
-            if (data) {
-                if (data->exp.nunchuk.js.x < -30) {
+        struct expansion_t nunchukExp;
+        WPAD_Expansion(0, &nunchukExp);
+        if (nunchukExp.type == WPAD_EXP_NUNCHUK) {
+            WPADData* wdata = WPAD_Data(0);
+            if (wdata) {
+                if (wdata->exp.nunchuk.js.x < -30) {
                     RunnerKeyboard_onKeyDown(kb, 276); // Left
-                } else if (data->exp.nunchuk.js.x > 30) {
+                } else if (wdata->exp.nunchuk.js.x > 30) {
                     RunnerKeyboard_onKeyDown(kb, 275); // Right
                 }
                 
-                if (data->exp.nunchuk.js.y < -30) {
+                if (wdata->exp.nunchuk.js.y < -30) {
                     RunnerKeyboard_onKeyDown(kb, 274); // Down
-                } else if (data->exp.nunchuk.js.y > 30) {
+                } else if (wdata->exp.nunchuk.js.y > 30) {
                     RunnerKeyboard_onKeyDown(kb, 273); // Up
                 }
             }
