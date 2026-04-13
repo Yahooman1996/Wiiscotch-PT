@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 project(wiiscotch C)
 
-set(CMAKE_C_STANDARD 23)
+set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 add_compile_options(-Wall -Wextra)
 
@@ -55,8 +55,9 @@ if(PLATFORM STREQUAL "glfw")
     else()
         find_package(PkgConfig REQUIRED)
         pkg_check_modules(GLFW3 REQUIRED glfw3)
-        target_include_directories(wiiscotch PRIVATE ${GLFW3_INCLUDE_DIRS})
-        target_link_libraries(wiiscotch ${GLFW3_LIBRARIES} glad m pthread dl)
+        target_include_directories(butterscotch PRIVATE ${GLFW3_INCLUDE_DIRS})
+        target_link_directories(butterscotch PRIVATE ${GLFW3_LIBRARY_DIRS})
+        target_link_libraries(butterscotch ${GLFW3_LIBRARIES} glad m pthread dl)
     endif()
 
     # Enable AddressSanitizer by default in Debug builds
@@ -77,6 +78,8 @@ elseif(PLATFORM STREQUAL "ps2")
     add_compile_definitions(NO_RVALUE_INT64)
     # Disable Wiiscotch VM/interpreter tracing checks
     add_compile_definitions(DISABLE_VM_TRACING)
+    # Platform identifier for PS2-specific code paths (e.g., scratchpad allocation)
+    add_compile_definitions(PLATFORM_PS2)
     # Disable the PS2 audio system
     option(DISABLE_PS2_AUDIO "Disable the PS2 audio system" OFF)
     if(DISABLE_PS2_AUDIO)

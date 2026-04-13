@@ -1,5 +1,6 @@
 #pragma once
 
+#include "common.h"
 #include <stdint.h>
 #include <stddef.h>
 
@@ -34,8 +35,15 @@
 
 // ===[ GML Math Epsilon (used for floating-point comparisons) ]===
 // The real GameMaker runner uses epsilon-based comparison for all numeric CMP operations.
-// Default value matches the HTML5 runner's g_GMLMathEpsilon.
+// Default value matches the HTML5 runner's g_GMLMathEpsilon (1e-5 for double precision).
+// When using single-precision floats, we use 1e-4 to work around accumulated rounding errors from
+// non-IEEE FPUs (example: PS2's R5900 which rounds toward zero instead of round-to-nearest) can
+// exceed the default epsilon.
+#ifdef USE_FLOAT_REALS
+#define GML_MATH_EPSILON 1e-4
+#else
 #define GML_MATH_EPSILON 1e-5
+#endif
 
 // GMS 1.4 supports up to 16 arguments per script call
 #define GML_MAX_ARGUMENTS 16
@@ -82,6 +90,14 @@
 #define OP_CALL     0xD9
 #define OP_BREAK    0xFF
 
+// ===[ FuncCallCache - Cached resolution for CALL instructions ]===
+// Avoids per-call string hash lookups in both the builtin map and funcMap.
+// Resolved once during VM_create, then used directly by handleCall.
+typedef struct {
+    void* builtin; // cached BuiltinFunc pointer, or nullptr
+    int32_t scriptCodeIndex; // cached script code index, or -1 if not a script
+} FuncCallCache;
+
 // ===[ CallFrame - Saved state for script-to-script calls ]===
 typedef struct CallFrame {
     uint32_t savedIP;
@@ -106,43 +122,59 @@ typedef struct EnvFrame {
 } EnvFrame;
 
 // ===[ VMStack - Upward-growing array of RValue slots ]===
-#define VM_STACK_SIZE 16384
+#define VM_STACK_SIZE 1024
 
 typedef struct {
-    RValue slots[VM_STACK_SIZE];
     int32_t top;
+    RValue slots[VM_STACK_SIZE];
 } VMStack;
 
 // Forward declaration for Runner
 struct Runner;
 
 // ===[ VMContext - Holds all VM state ]===
+// Fields are ordered by access frequency so that the hottest data sits in the first bytes of the struct
+// This way data can be kept "hot" in the CPU cache or, depending on the platform, in scratchpad RAM
 typedef struct VMContext {
-    DataWin* dataWin;
-    struct Runner* runner;
+    // Hot: touched every instruction in the dispatch loop
     uint8_t* bytecodeBase;
     uint32_t ip;
     uint32_t codeEnd;
-    VMStack stack;
     RValue* localVars;
     uint32_t localVarCount;
     RValue* globalVars;
     uint32_t globalVarCount;
-    int32_t selfId;
-    int32_t otherId;
     struct Instance* currentInstance;
     struct Instance* otherInstance; // "other" instance for collision events
+    DataWin* dataWin;
+    struct Runner* runner;
+    ArrayMapEntry* localArrayMap;
+    ArrayMapEntry* globalArrayMap;
+    FuncCallCache* funcCallCache;
+    const char* currentCodeName;
+
+    // Warm: touched on calls, variable resolution, event dispatch
     CallFrame* callStack;
     int32_t callDepth;
     EnvFrame* envStack; // Environment stack for with-statements (PushEnv/PopEnv)
-    const char* currentCodeName;
-    // Array variable maps: key = ((int64_t)varID << 32) | (uint32_t)arrayIndex
-    ArrayMapEntry* globalArrayMap;
-    ArrayMapEntry* localArrayMap;
-    // Tracks which global varIDs have array data (for array aliasing)
-    struct { int32_t key; int32_t value; }* globalArrayVarTracker;
     RValue* scriptArgs;       // Arguments passed to current script (nullptr for non-script code)
     int32_t scriptArgCount;   // Number of arguments passed
+    int32_t selfId;
+    int32_t otherId;
+    // Current event context (set by Runner_executeEvent, -1 when not in an event)
+    int32_t currentEventType;
+    int32_t currentEventSubtype;
+    int32_t currentEventObjectIndex; // objectIndex of the object that owns the executing event handler
+    // Cached varID for the built-in "creator" self variable (-1 if not found)
+    int32_t creatorVarID;
+    uint32_t funcCallCacheCount;
+    bool traceEventInherited;
+    bool hasFixedSeed;
+    bool actionRelativeFlag; // D&D action relative flag (set by action_set_relative)
+
+    // Cold: init-only or rare lookups
+    // Tracks which global varIDs have array data (for array aliasing)
+    struct { int32_t key; int32_t value; }* globalArrayVarTracker;
     // funcName -> codeIndex hash map (stb_ds)
     struct { char* key; int32_t value; }* funcMap;
     // varName -> varID hash map for global variables (stb_ds)
@@ -151,6 +183,8 @@ typedef struct VMContext {
     StringBooleanEntry* loggedUnknownFuncs;
     // "codeName\tfuncName" -> true, for deduplicating stubbed function warnings
     StringBooleanEntry* loggedStubbedFuncs;
+    // Cross-reference map for disassembler: targetCodeIndex -> stb_ds array of callerCodeIndex
+    struct { int32_t key; int32_t* value; }* crossRefMap;
 #ifndef DISABLE_VM_TRACING
     StringBooleanEntry* varReadsToBeTraced;
     StringBooleanEntry* varWritesToBeTraced;
@@ -162,17 +196,9 @@ typedef struct VMContext {
     StringBooleanEntry* stackToBeTraced;
     StringBooleanEntry* tilesToBeTraced;
 #endif
-    // Current event context (set by Runner_executeEvent, -1 when not in an event)
-    int32_t currentEventType;
-    int32_t currentEventSubtype;
-    int32_t currentEventObjectIndex; // objectIndex of the object that owns the executing event handler
-    bool traceEventInherited;
-    bool hasFixedSeed;
-    bool actionRelativeFlag; // D&D action relative flag (set by action_set_relative)
-    // Cached varID for the built-in "creator" self variable (-1 if not found)
-    int32_t creatorVarID;
-    // Cross-reference map for disassembler: targetCodeIndex -> stb_ds array of callerCodeIndex
-    struct { int32_t key; int32_t* value; }* crossRefMap;
+
+    // Stack at the end because it is a big chunky boi (we don't want it pushing fields around)
+    VMStack stack;
 } VMContext;
 
 // ===[ Public API ]===

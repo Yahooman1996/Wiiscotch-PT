@@ -1,6 +1,7 @@
 #pragma once
 #include <stdbool.h>
 
+#include "common.h"
 #include "file_system.h"
 
 // Creates an in-memory FileSystem backed by a hashmap instead of real disk I/O

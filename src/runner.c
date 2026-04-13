@@ -215,18 +215,49 @@ void Runner_executeEvent(Runner* runner, Instance* instance, int32_t eventType, 
     Runner_executeEventFromObject(runner, instance, instance->objectIndex, eventType, eventSubtype);
 }
 
+// Pair used for stable sorting: holds the instance pointer and its original array position.
+typedef struct {
+    Instance* inst;
+    int32_t originalIndex;
+} IndexedInstance;
+
+// Comparator for per-object-type event dispatch (ascending objectIndex).
+static int compareInstanceByObjectIndex(const void* a, const void* b) {
+    const IndexedInstance* ia = (const IndexedInstance*) a;
+    const IndexedInstance* ib = (const IndexedInstance*) b;
+    // Primary: group by objectIndex ascending (lower object index executes first)
+    if (ia->inst->objectIndex < ib->inst->objectIndex) return -1;
+    if (ib->inst->objectIndex < ia->inst->objectIndex) return 1;
+    // Secondary: preserve creation order within the same object type
+    if (ia->originalIndex < ib->originalIndex) return -1;
+    if (ib->originalIndex < ia->originalIndex) return 1;
+    return 0;
+}
+
 void Runner_executeEventForAll(Runner* runner, int32_t eventType, int32_t eventSubtype) {
-    // Iterate BACKWARDS over instances, matching the HTML5 runner's PerformEvent which iterates from pool.length-1 down to 0
-    // Instances added later to the array are executed first
-    // This matters for things like for DELTARUNE's inventory key check
-    // See yyInstance.js for reference
+    // Dispatch events per-object-type, matching the native GMS 1.4 and 2.0 runners
+    // The native runners iterate a prebuilt array of object indices (objects that have handlers for this event),
+    // then for each object type iterate all its instances. We approximate this by sorting all active instances by
+    // objectIndex (ascending), preserving creation order as the tiebreaker within the same object type
     int32_t count = (int32_t) arrlen(runner->instances);
-    for (int32_t index = count - 1; index >= 0; index--) {
-        Instance* inst = runner->instances[index];
+    IndexedInstance* sorted = nullptr;
+    repeat(count, i) {
+        Instance* inst = runner->instances[i];
         if (inst->active) {
-            Runner_executeEvent(runner, inst, eventType, eventSubtype);
+            IndexedInstance ii = { .inst = inst, .originalIndex = i };
+            arrput(sorted, ii);
         }
     }
+    int32_t sortedCount = (int32_t) arrlen(sorted);
+    if (sortedCount > 1) {
+        qsort(sorted, sortedCount, sizeof(IndexedInstance), compareInstanceByObjectIndex);
+    }
+    repeat(sortedCount, i) {
+        if (sorted[i].inst->active) {
+            Runner_executeEvent(runner, sorted[i].inst, eventType, eventSubtype);
+        }
+    }
+    arrfree(sorted);
 }
 
 // ===[ Background Scrolling & Drawing ]===
@@ -394,6 +425,7 @@ void Runner_draw(Runner* runner) {
             Drawable d = { .type = DRAWABLE_LAYER, .depth = layerDrawList[i]->depth, .layer = layerDrawList[i] };
             arrput(drawables, d);
         }
+        arrfree(layerDrawList);
     }
 
     // Sort all drawables by depth
@@ -461,8 +493,10 @@ void Runner_draw(Runner* runner) {
                 {
                     if (runner->renderer != nullptr) {
                         RoomTile* tile = &data->legacyTiles[i];
-                        float offsetX = 0.0f, offsetY = 0.0f;
+                        // Check if this tile's layer is hidden via tile_layer_hide()
                         ptrdiff_t layerIdx = hmgeti(runner->tileLayerMap, tile->tileDepth);
+                        if (layerIdx >= 0 && !runner->tileLayerMap[layerIdx].value.visible) continue;
+                        float offsetX = 0.0f, offsetY = 0.0f;
                         if (layerIdx >= 0) {
                             offsetX = runner->tileLayerMap[layerIdx].value.offsetX;
                             offsetY = runner->tileLayerMap[layerIdx].value.offsetY;
@@ -535,15 +569,8 @@ void Runner_draw(Runner* runner) {
                             runner->renderer->vtable->drawSprite(runner->renderer, tpagIndex, d->layer->xOffset, d->layer->yOffset, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 0xFFFFFF, 1.0);
                         }
             } else if(d->layer->type == RoomLayerType_Instances) {
-                RoomLayerInstancesData *data = d->layer->instancesData;
-                // TODO: This isn't the right way to do this
-                repeat(data->instanceCount, i) {
-                    Instance* inst = hmget(runner->instancesToId, data->instanceIds[i]);
-                    if (inst == nullptr)
-                        continue;
-                    if(inst->depth == 0)
-                        inst->depth = d->layer->depth;
-                }
+                // Instance depth is assigned from layers during room init (initRoom).
+                // Nothing to do here - instances are drawn from the DRAWABLE_INSTANCE path.
             }
         }
     }
@@ -724,9 +751,25 @@ static void initRoom(Runner* runner, int32_t roomIndex) {
         if (isObjectDisabled(runner, roomObj->objectDefinition)) continue;
 
         Instance* inst = createAndInitInstance(runner, roomObj->instanceID, roomObj->objectDefinition, (GMLReal) roomObj->x, (GMLReal) roomObj->y);
-        inst->imageXscale = (GMLReal) roomObj->scaleX;
-        inst->imageYscale = (GMLReal) roomObj->scaleY;
-        inst->imageAngle = (GMLReal) roomObj->rotation;
+        inst->imageXscale = (float) roomObj->scaleX;
+        inst->imageYscale = (float) roomObj->scaleY;
+        inst->imageAngle = (float) roomObj->rotation;
+    }
+
+    // In GMS2, instances get their depth from their room layer, not the object definition.
+    // This must happen before firing Create events so scripts like scr_depth() read the layer depth.
+    if (runner->isGMS2) {
+        repeat(room->layerCount, li) {
+            RoomLayer* layer = &room->layers[li];
+            if (layer->type != RoomLayerType_Instances || layer->instancesData == nullptr) continue;
+            RoomLayerInstancesData* layerData = layer->instancesData;
+            repeat(layerData->instanceCount, ii) {
+                Instance* inst = hmget(runner->instancesToId, layerData->instanceIds[ii]);
+                if (inst != nullptr) {
+                    inst->depth = layer->depth;
+                }
+            }
+        }
     }
 
     // Pass 2: Fire events for newly created instances (in room definition order)
@@ -797,7 +840,7 @@ Instance* Runner_createInstance(Runner* runner, GMLReal x, GMLReal y, int32_t ob
     return inst;
 }
 
-void Runner_destroyInstance([[maybe_unused]] Runner* runner, Instance* inst) {
+void Runner_destroyInstance(MAYBE_UNUSED Runner* runner, Instance* inst) {
     GameObject* gameObject = &runner->dataWin->objt.objects[inst->objectIndex];
     Runner_executeEvent(runner, inst, EVENT_DESTROY, 0);
     // A destroyed instance must ALWAYS be not active
@@ -1066,29 +1109,34 @@ static bool adaptPath(Runner* runner, Instance* inst) {
     PathPositionResult cur = GamePath_getPosition(path, inst->pathPosition);
     GMLReal sp = cur.speed / (100.0 * inst->pathScale);
 
-    // Advance position
-    inst->pathPosition = inst->pathPosition + inst->pathSpeed * sp / path->length;
+    // Advance position (compute in higher precision, truncate to float on store - matches native runner)
+    inst->pathPosition = (float) (inst->pathPosition + inst->pathSpeed * sp / path->length);
 
     // Handle end actions if position out of [0,1]
     PathPositionResult pos0 = GamePath_getPosition(path, 0.0);
-    if (inst->pathPosition >= 1.0 || 0.0 >= inst->pathPosition) {
-        atPathEnd = (inst->pathSpeed == 0.0) ? false : true;
+    if (inst->pathPosition >= 1.0f || 0.0f >= inst->pathPosition) {
+        atPathEnd = (inst->pathSpeed == 0.0f) ? false : true;
 
         switch (inst->pathEndAction) {
             // stop moving
             case 0: {
-                if (inst->pathSpeed != 0.0) {
-                    inst->pathPosition = 1.0;
+                if (inst->pathSpeed >= 0.0f) {
+                    if (inst->pathSpeed != 0.0f) {
+                        inst->pathPosition = 1.0f;
+                        inst->pathIndex = -1;
+                    }
+                } else {
+                    inst->pathPosition = 0.0f;
                     inst->pathIndex = -1;
                 }
                 break;
             }
             // continue from start position (restart)
             case 1: {
-                if (0.0 > inst->pathPosition) {
-                    inst->pathPosition += 1.0;
+                if (0.0f > inst->pathPosition) {
+                    inst->pathPosition += 1.0f;
                 } else {
-                    inst->pathPosition -= 1.0;
+                    inst->pathPosition -= 1.0f;
                 }
                 break;
             }
@@ -1100,31 +1148,31 @@ static bool adaptPath(Runner* runner, Instance* inst) {
                 GMLReal xdif = inst->pathScale * (xx * GMLReal_cos(orient) + yy * GMLReal_sin(orient));
                 GMLReal ydif = inst->pathScale * (yy * GMLReal_cos(orient) - xx * GMLReal_sin(orient));
 
-                if (0.0 > inst->pathPosition) {
-                    inst->pathXStart -= xdif;
-                    inst->pathYStart -= ydif;
-                    inst->pathPosition += 1.0;
+                if (0.0f > inst->pathPosition) {
+                    inst->pathXStart -= (float) xdif;
+                    inst->pathYStart -= (float) ydif;
+                    inst->pathPosition += 1.0f;
                 } else {
-                    inst->pathXStart += xdif;
-                    inst->pathYStart += ydif;
-                    inst->pathPosition -= 1.0;
+                    inst->pathXStart += (float) xdif;
+                    inst->pathYStart += (float) ydif;
+                    inst->pathPosition -= 1.0f;
                 }
                 break;
             }
             // reverse
             case 3: {
-                if (0.0 > inst->pathPosition) {
+                if (0.0f > inst->pathPosition) {
                     inst->pathPosition = -inst->pathPosition;
-                    inst->pathSpeed = GMLReal_fabs(inst->pathSpeed);
+                    inst->pathSpeed = (float) GMLReal_fabs(inst->pathSpeed);
                 } else {
-                    inst->pathPosition = 2.0 - inst->pathPosition;
-                    inst->pathSpeed = -GMLReal_fabs(inst->pathSpeed);
+                    inst->pathPosition = 2.0f - inst->pathPosition;
+                    inst->pathSpeed = (float) -GMLReal_fabs(inst->pathSpeed);
                 }
                 break;
             }
             // default: stop
             default: {
-                inst->pathPosition = 1.0;
+                inst->pathPosition = 1.0f;
                 inst->pathIndex = -1;
                 break;
             }
@@ -1140,18 +1188,18 @@ static bool adaptPath(Runner* runner, Instance* inst) {
     GMLReal newy = inst->pathYStart + inst->pathScale * (yy * GMLReal_cos(orient) - xx * GMLReal_sin(orient));
 
     // Trick to set the direction: set hspeed/vspeed to delta, which updates direction
-    inst->hspeed = newx - inst->x;
-    inst->vspeed = newy - inst->y;
+    inst->hspeed = (float) (newx - inst->x);
+    inst->vspeed = (float) (newy - inst->y);
     Instance_computeSpeedFromComponents(inst);
 
     // Normal speed should not be used
-    inst->speed = 0.0;
-    inst->hspeed = 0.0;
-    inst->vspeed = 0.0;
+    inst->speed = 0.0f;
+    inst->hspeed = 0.0f;
+    inst->vspeed = 0.0f;
 
     // Set the new position
-    inst->x = newx;
-    inst->y = newy;
+    inst->x = (float) newx;
+    inst->y = (float) newy;
 
     return atPathEnd;
 }
@@ -1165,6 +1213,27 @@ void Runner_step(Runner* runner) {
             inst->xprevious = inst->x;
             inst->yprevious = inst->y;
             inst->pathPositionPrevious = inst->pathPosition;
+        }
+    }
+
+    // Advance image_index by image_speed for all active instances
+    int32_t animCount = (int32_t) arrlen(runner->instances);
+    repeat(animCount, i) {
+        Instance* inst = runner->instances[i];
+        if (!inst->active) continue;
+        if (0 > inst->spriteIndex) continue;
+
+        inst->imageIndex += inst->imageSpeed;
+
+        // Wrap image_index (matches HTML5 runner: manual subtract/add instead of using fmod)
+        Sprite* sprite = &runner->dataWin->sprt.sprites[inst->spriteIndex];
+        float frameCount = (float) sprite->textureCount;
+        if (inst->imageIndex >= frameCount) {
+            inst->imageIndex -= frameCount;
+            Runner_executeEvent(runner, inst, EVENT_OTHER, OTHER_ANIMATION_END);
+        } else if (0.0f > inst->imageIndex) {
+            inst->imageIndex += frameCount;
+            Runner_executeEvent(runner, inst, EVENT_OTHER, OTHER_ANIMATION_END);
         }
     }
 
@@ -1234,21 +1303,21 @@ void Runner_step(Runner* runner) {
         if (!inst->active) continue;
 
         // Friction: reduce speed toward zero (HTML5: AdaptSpeed)
-        if (inst->friction != 0.0) {
-            GMLReal ns = (inst->speed > 0.0) ? inst->speed - inst->friction : inst->speed + inst->friction;
-            if ((inst->speed > 0.0 && ns < 0.0) || (inst->speed < 0.0 && ns > 0.0)) {
-                inst->speed = 0.0;
-            } else if (inst->speed != 0.0) {
+        if (inst->friction != 0.0f) {
+            float ns = (inst->speed > 0.0f) ? inst->speed - inst->friction : inst->speed + inst->friction;
+            if ((inst->speed > 0.0f && ns < 0.0f) || (inst->speed < 0.0f && ns > 0.0f)) {
+                inst->speed = 0.0f;
+            } else if (inst->speed != 0.0f) {
                 inst->speed = ns;
             }
             Instance_computeComponentsFromSpeed(inst);
         }
 
         // Gravity: add velocity in gravity_direction (HTML5: AddTo_Speed)
-        if (inst->gravity != 0.0) {
+        if (inst->gravity != 0.0f) {
             GMLReal gravDirRad = inst->gravityDirection * (M_PI / 180.0);
-            inst->hspeed += inst->gravity * clampFloat(GMLReal_cos(gravDirRad));
-            inst->vspeed -= inst->gravity * clampFloat(GMLReal_sin(gravDirRad));
+            inst->hspeed += (float) (inst->gravity * clampFloat(GMLReal_cos(gravDirRad)));
+            inst->vspeed -= (float) (inst->gravity * clampFloat(GMLReal_sin(gravDirRad)));
             Instance_computeSpeedFromComponents(inst);
         }
 
@@ -1258,7 +1327,7 @@ void Runner_step(Runner* runner) {
         }
 
         // Apply movement
-        if (inst->hspeed != 0.0 || inst->vspeed != 0.0) {
+        if (inst->hspeed != 0.0f || inst->vspeed != 0.0f) {
             inst->x += inst->hspeed;
             inst->y += inst->vspeed;
         }
@@ -1276,27 +1345,6 @@ void Runner_step(Runner* runner) {
     // Update view following and clamping
     updateViews(runner);
 
-    // Advance image_index by image_speed for all active instances
-    int32_t animCount = (int32_t) arrlen(runner->instances);
-    repeat(animCount, i) {
-        Instance* inst = runner->instances[i];
-        if (!inst->active) continue;
-        if (0 > inst->spriteIndex) continue;
-
-        inst->imageIndex += inst->imageSpeed;
-
-        // Wrap image_index (matches HTML5 runner: manual subtract/add instead of using fmod)
-        Sprite* sprite = &runner->dataWin->sprt.sprites[inst->spriteIndex];
-        GMLReal frameCount = (GMLReal) sprite->textureCount;
-        if (inst->imageIndex >= frameCount) {
-            inst->imageIndex -= frameCount;
-            Runner_executeEvent(runner, inst, EVENT_OTHER, OTHER_ANIMATION_END);
-        } else if (0.0 > inst->imageIndex) {
-            inst->imageIndex += frameCount;
-            Runner_executeEvent(runner, inst, EVENT_OTHER, OTHER_ANIMATION_END);
-        }
-    }
-
     // Handle room transition
     if (runner->pendingRoom >= 0) {
         int32_t oldRoomIndex = runner->currentRoomIndex;
@@ -1307,6 +1355,7 @@ void Runner_step(Runner* runner) {
         Runner_executeEventForAll(runner, EVENT_OTHER, OTHER_ROOM_END);
 
         int32_t newRoomIndex = runner->pendingRoom;
+        runner->pendingRoom = -1;
         require(runner->dataWin->room.count > (uint32_t) newRoomIndex);
         const char* newRoomName = runner->dataWin->room.rooms[newRoomIndex].name;
 
@@ -1361,8 +1410,6 @@ void Runner_step(Runner* runner) {
 
         // Fire Room Start for all instances
         Runner_executeEventForAll(runner, EVENT_OTHER, OTHER_ROOM_START);
-
-        runner->pendingRoom = -1;
     }
 
     Runner_cleanupDestroyedInstances(runner);
@@ -1801,7 +1848,7 @@ void Runner_free(Runner* runner) {
             SavedRoomState* state = &runner->savedRoomStates[i];
             int32_t savedCount = (int32_t) arrlen(state->instances);
             repeat(savedCount, j) {
-                hmdel(runner->instancesToId, state->instances[i]->instanceId);
+                hmdel(runner->instancesToId, state->instances[j]->instanceId);
                 Instance_free(state->instances[j]);
             }
             arrfree(state->instances);
@@ -1810,6 +1857,7 @@ void Runner_free(Runner* runner) {
         free(runner->savedRoomStates);
     }
 
+    hmfree(runner->instancesToId);
     hmfree(runner->tileLayerMap);
     shfree(runner->disabledObjects);
     RunnerKeyboard_free(runner->keyboard);

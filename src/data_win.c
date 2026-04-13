@@ -555,6 +555,7 @@ static void parseSPRT(BinaryReader* reader, DataWin* dw, bool skipLoadingPrecise
                 }
             } else {
                 BinaryReader_skip(reader, bytesPerMask * maskDataCount);
+                spr->masks = nullptr;
             }
             // Pad the TOTAL mask data to 4-byte alignment (not per-mask)
             uint32_t totalMaskBytes = bytesPerMask * maskDataCount;
@@ -776,6 +777,8 @@ static void parseFONT(BinaryReader* reader, DataWin* dw) {
         font->textureOffset = BinaryReader_readUint32(reader);
         font->scaleX = BinaryReader_readFloat32(reader);
         font->scaleY = BinaryReader_readFloat32(reader);
+        font->isSpriteFont = false;
+        font->spriteIndex = -1;
 
         // Glyphs PointerList
         uint32_t glyphCount;
@@ -1134,6 +1137,9 @@ static void parseROOM(BinaryReader* reader, DataWin* dw) {
                         layer->hSpeed = BinaryReader_readFloat32(reader);
                         layer->vSpeed = BinaryReader_readFloat32(reader);
                         layer->visible = BinaryReader_readBool32(reader);
+                        layer->assetsData = nullptr;
+                        layer->backgroundData = nullptr;
+                        layer->instancesData = nullptr;
                         switch (layer->type) {
                             case RoomLayerType_Path:
                                 break; // Nothing to do;
@@ -1748,6 +1754,11 @@ void DataWin_free(DataWin* dw) {
 
 
     // BGND
+    if (dw->bgnd.backgrounds) {
+        repeat(dw->bgnd.count, i) {
+            free(dw->bgnd.backgrounds[i].gms2TileIds);
+        }
+    }
     free(dw->bgnd.backgrounds);
 
     // PATH
@@ -1827,6 +1838,11 @@ void DataWin_free(DataWin* dw) {
             if (dw->room.rooms[i].layerCount != 0) {
                 repeat(dw->room.rooms[i].layerCount, j) {
                     RoomLayer* layer = &dw->room.rooms[i].layers[j];
+                    if (layer->assetsData) {
+                        free(layer->assetsData->legacyTiles);
+                        free(layer->assetsData->sprites);
+                        free(layer->assetsData);
+                    }
                     if (layer->backgroundData) free(layer->backgroundData);
                     if (layer->instancesData) {
                         free(layer->instancesData->instanceIds);

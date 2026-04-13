@@ -1,6 +1,7 @@
 #pragma once
 #include <stdbool.h>
 
+#include "common.h"
 #include <stdint.h>
 
 #include "runner_keyboard.h"

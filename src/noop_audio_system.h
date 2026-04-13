@@ -1,6 +1,7 @@
 #pragma once
 #include <stdbool.h>
 
+#include "common.h"
 #include "audio_system.h"
 
 // A no-op audio system that silently ignores all audio calls.

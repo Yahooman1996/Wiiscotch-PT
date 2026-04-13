@@ -1,4 +1,5 @@
 #include "data_win.h"
+#include "glfw/gl_legacy_renderer.h"
 #include "vm.h"
 
 #include <glad/glad.h>
@@ -17,6 +18,8 @@
 #include "runner_keyboard.h"
 #include "runner.h"
 #include "input_recording.h"
+#include "vm_builtins.h"
+#include "debug_overlay.h"
 #include "gl_renderer.h"
 #include "glfw_file_system.h"
 #include "ma_audio_system.h"
@@ -63,6 +66,7 @@ typedef struct {
     bool traceEventInherited;
     const char* recordInputsPath;
     const char* playbackInputsPath;
+    const char* renderer;
 } CommandLineArgs;
 
 static void parseCommandLineArgs(CommandLineArgs* args, int argc, char* argv[]) {
@@ -95,12 +99,14 @@ static void parseCommandLineArgs(CommandLineArgs* args, int argc, char* argv[]) 
         {"disassemble", required_argument, nullptr, 'A'},
         {"record-inputs", required_argument, nullptr, 'I'},
         {"playback-inputs", required_argument, nullptr, 'P'},
+        {"renderer", required_argument, nullptr, 'g'},
         {nullptr,               0,                 nullptr,  0 }
     };
 
     args->screenshotFrames = nullptr;
     args->exitAtFrame = -1;
     args->speedMultiplier = 1.0;
+    args->renderer = "gl";
 
     int opt;
     while ((opt = getopt_long(argc, argv, "", longOptions, nullptr)) != -1) {
@@ -200,6 +206,9 @@ static void parseCommandLineArgs(CommandLineArgs* args, int argc, char* argv[]) 
             }
             case 'D':
                 args->debug = true;
+                break;
+            case 'g':
+                args->renderer = optarg;
                 break;
             case 'A':
                 shput(args->disassemble, optarg, true);
@@ -431,6 +440,7 @@ int main(int argc, char* argv[]) {
                 );
             }
         }
+        VMBuiltins_free();
         VM_free(vm);
         DataWin_free(dataWin);
         return 0;
@@ -440,6 +450,7 @@ int main(int argc, char* argv[]) {
         repeat(hmlen(vm->funcMap), i) {
             printf("[%d] %s\n", vm->funcMap[i].value, vm->funcMap[i].key);
         }
+        VMBuiltins_free();
         VM_free(vm);
         DataWin_free(dataWin);
         return 0;
@@ -462,6 +473,7 @@ int main(int argc, char* argv[]) {
                 }
             }
         }
+        VMBuiltins_free();
         VM_free(vm);
         DataWin_free(dataWin);
         freeCommandLineArgs(&args);
@@ -493,6 +505,8 @@ int main(int argc, char* argv[]) {
     runner->vmContext->traceEventInherited = args.traceEventInherited;
 
     // Init GLFW
+    if(strcmp(args.renderer, "legacy-gl") == 0)
+        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
     if (!glfwInit()) {
         fprintf(stderr, "Failed to initialize GLFW\n");
         DataWin_free(dataWin);
@@ -527,7 +541,12 @@ int main(int argc, char* argv[]) {
     }
 
     // Initialize the renderer
-    Renderer* renderer = GLRenderer_create();
+    Renderer* renderer = nullptr;
+    if(strcmp(args.renderer, "legacy-gl") == 0)
+        renderer = GLLegacyRenderer_create();
+    else
+        renderer = GLRenderer_create();
+
     renderer->vtable->init(renderer, dataWin);
     runner->renderer = renderer;
 
@@ -554,6 +573,7 @@ int main(int argc, char* argv[]) {
 
     // Main loop
     bool debugPaused = false;
+    bool debugShowCollisionMasks = false;
     double lastFrameTime = glfwGetTime();
     while (!glfwWindowShouldClose(window) && !runner->shouldExit) {
         // Clear last frame's pressed/released state, then poll new input events
@@ -620,6 +640,12 @@ int main(int argc, char* argv[]) {
                 }
 
                 free(json);
+            }
+
+            // Toggle the collision mask debug overlay
+            if (RunnerKeyboard_checkPressed(runner->keyboard, VK_F2)) {
+                debugShowCollisionMasks = !debugShowCollisionMasks;
+                fprintf(stderr, "Debug: Collision mask overlay %s!\n", debugShowCollisionMasks ? "enabled" : "disabled");
             }
 
             // Reset global interact state because I HATE when I get stuck while moving through rooms
@@ -750,6 +776,8 @@ int main(int argc, char* argv[]) {
 
                 Runner_draw(runner);
 
+                if (debugShowCollisionMasks) DebugOverlay_drawCollisionMasks(runner);
+
                 renderer->vtable->endView(renderer);
                 anyViewRendered = true;
             }
@@ -760,6 +788,9 @@ int main(int argc, char* argv[]) {
             runner->viewCurrent = 0;
             renderer->vtable->beginView(renderer, 0, 0, gameW, gameH, 0, 0, gameW, gameH, 0.0f);
             Runner_draw(runner);
+
+            if (debugShowCollisionMasks) DebugOverlay_drawCollisionMasks(runner);
+
             renderer->vtable->endView(renderer);
         }
 
@@ -836,6 +867,7 @@ int main(int argc, char* argv[]) {
 
     Runner_free(runner);
     GlfwFileSystem_destroy(glfwFileSystem);
+    VMBuiltins_free();
     VM_free(vm);
     DataWin_free(dataWin);
 
