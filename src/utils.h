@@ -5,6 +5,15 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdbool.h>
+
+#ifndef NULL
+#define NULL ((void*)0)
+#endif
+
+#ifndef nullptr
+#define nullptr NULL
+#endif
 
 #include "real_type.h"
 

@@ -3,6 +3,15 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
+
+#ifndef NULL
+#define NULL ((void*)0)
+#endif
+
+#ifndef nullptr
+#define nullptr NULL
+#endif
 
 BinaryReader BinaryReader_create(FILE* file, size_t fileSize) {
     return (BinaryReader){.file = file, .fileSize = fileSize, .buffer = nullptr, .bufferBase = 0, .bufferSize = 0, .bufferPos = 0};

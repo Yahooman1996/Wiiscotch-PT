@@ -1,28 +1,29 @@
-<h1 align="center">🥧 Butterscotch 🥧</h1>
+<h1 align="center">🥧 Wiiscotch 🥧</h1>
 
 <!-- Badges, about the GitHub repository itself -->
-<p align="center">
-<a href="https://discord.gg/2gQR7t3WJR"><img src="https://img.shields.io/discord/1406856655920168971?color=5865F2&logo=discord&logoColor=white&label=discord"></a>
-</p>
+<!-- There are no Discord servers dedicated to My/AI's Fork -->
 
 > [!IMPORTANT]  
-> Butterscotch is still VERY early in development and it is NOT that good yet.
+> Wiiscotch is a **Nintendo Wii fork** of Butterscotch, which is still VERY early in development and it is NOT that good yet.
+> And keep attention that this is a fork made mostly by AI, which MEANS it is vibe code.
 
 When you create a game in GameMaker: Studio and export it, GameMaker: Studio exports the game code as bytecode instead of native compiled code, and that bytecode is compatible with any other GameMaker: Studio runner (also known as YoYo runner), as long as they have matching GameMaker: Studio versions. This is similar to how Java applications work.
 
-This is how projects such as [Droidtale](https://mrpowergamerbr.com/projects/droidtale) (which was also made by yours truly) can exist. We exploit that GameMaker: Studio games compile to bytecode, which means they can be ran on *any* platform that has an official runner for it!
+This is how projects such as [Droidtale](https://mrpowergamerbr.com/projects/droidtale) (which was also made by yours truly, Mr. Power) can exist. We exploit that GameMaker: Studio games compile to bytecode, which means they can be ran on *any* platform that has an official runner for it!
 
-Ever since I created Droidtale 10+ years ago, I had that lingering thought in my mind... If GameMaker games use bytecode, what prevents us from creating our *own* runner? And if we can write our *own* runner, what prevents us from porting GameMaker: Studio games to other platforms?
+Ever since Mr. Power created Droidtale 10+ years ago, He had that lingering thought in my mind... If GameMaker games use bytecode, what prevents them from creating their *own* runner? And if they can write their *own* runner, what prevents them from porting GameMaker: Studio games to other platforms?
 
-And that's where Butterscotch comes in! Butterscotch is an open source re-implementation of GameMaker: Studio's runner.
+And that's where Wiiscotch comes in! Wiiscotch is an open source re-implementation of GameMaker: Studio's runner.
 
-**Butterscotch PlayStation 2 ISO Generator:** https://butterscotch.mrpowergamerbr.com/
+**Wiiscotch** is a Nintendo Wii fork of Butterscotch, bringing GameMaker games to the Wii console using libogc and GX.
+
+**NOTE:** This is a homebrew project.
 
 ## Game Compatibility
 
-Butterscotch's goal is to be able to have Undertale v1.08 (GameMaker: Studio 1.4.1804, Bytecode Version 16) fully playable. But we do want to support more GameMaker: Studio games in the future too!
+Wiiscotch inherits Butterscotch's goal to be able to have Undertale v1.08 (GameMaker: Studio 1.4.1804, Bytecode Version 16) fully playable. But we do want to support more GameMaker: Studio games in the future too!
 
-While our target is Undertale v1.08, that doesn't mean that other games CAN'T run in Butterscotch! Because Butterscotch is a runner and not a Undertale port/remake, you CAN run other GameMaker: Studio games with it and, as long as the game is compiled with GameMaker: Studio 1.4.1804 and they only use GML variables and functions that Butterscotch supports, it should work fine.
+While our target is Undertale v1.08, that doesn't mean that other games CAN'T run in Wiiscotch! Because Wiiscotch is a runner and not a Undertale port/remake, you CAN run other GameMaker: Studio games with it and, as long as the game is compiled with GameMaker: Studio 1.4.1804 and they only use GML variables and functions that Wiiscotch supports, it should work fine.
 
 Of course, there are exceptions that break game compatibility altogether:
 
@@ -34,6 +35,7 @@ Of course, there are exceptions that break game compatibility altogether:
 * Linux (GLFW, OpenGL)
 * Windows (GLFW, OpenGL, MinGW)
 * PlayStation 2 (ps2sdk, gsKit)
+* Nintendo Wii (libogc, GX)
 * ...and maybe more in the future!
 
 ## Community Ports
@@ -50,7 +52,25 @@ make
 
 If you are using CLion, set the platform in `Settings` > `Build, Execution, Deployment` > `CMake` and add `-DPLATFORM=glfw`
 
-Then run Butterscotch with `./butterscotch /path/to/data.win`!
+Then run Wiiscotch with `./wiiscotch /path/to/data.win`!
+
+### PlayStation 2
+
+```bash
+mkdir build && cd build
+cmake -DPLATFORM=ps2 -DCMAKE_TOOLCHAIN_FILE=$PS2SDK/ps2dev.cmake ..
+make
+```
+
+### Nintendo Wii
+
+```bash
+mkdir build && cd build
+cmake -DPLATFORM=wii -DCMAKE_TOOLCHAIN_FILE=$DEVKITPPC/cmake/Wii.cmake ..
+make
+```
+
+This will produce a `boot.dol` file that can be run on a Wii console or Dolphin emulator.
 
 ## CLI parameters
 
@@ -85,7 +105,7 @@ The GLFW target has a lot of nifty CLI parameters that you can use to trace and 
 
 ## Debug Features
 
-When running Butterscotch with `--debug`, the following hotkeys are enabled:
+When running Wiiscotch with `--debug`, the following hotkeys are enabled:
 
 * `Page Up`: Moves forward one room
 * `Page Down`: Moves backwards one room
@@ -97,7 +117,25 @@ When running Butterscotch with `--debug`, the following hotkeys are enabled:
 
 ## Performance
 
-Performance is pretty good on any modern computer, but when running on low end targets (like the PS2) it is *very* slow when there's a lot of instances on screen, or when a instance does a for loop.
+Performance is pretty good on any modern computer, but when running on low end targets (like the PS2 or Wii) it is *very* slow when there's a lot of instances on screen, or when a instance does a for loop.
+
+### Memory Management
+
+**Wiiscotch (Nintendo Wii)** features optimized memory management for the Wii's unique architecture:
+- **MEM1 (24 MB)**: Fast access memory used for code, VM data, and frequently accessed game objects
+- **MEM2 (64 MB)**: Slower access memory used for textures, audio buffers, and framebuffers
+- Total available: **88 MB** for applications
+
+The memory system tracks allocations in both MEM1 and MEM2 separately, providing debug output at key points:
+- Startup initialization
+- After loading data.win
+- After VM and runner creation  
+- After framebuffer allocation
+- At shutdown
+
+This allows developers to monitor memory usage and optimize games for the Wii's constrained environment.
+
+The Wii target uses float reals for better performance on the PowerPC FPU.
 
 ## Then why not have a transpiler?
 
@@ -130,30 +168,45 @@ Having a transpiler also have other disadvantages:
 
 Here's a video :3 https://youtu.be/3MoAPO8H85U
 
+### Undertale (Nintendo Wii)
+
+Coming soon! The Wii port uses libogc and GX for rendering.
+
 ## Tales of Agentic Engineering
 
-Since I created Droidtale, I've always had the thought about "if it is a VM, then you could reimplement it and port any GameMaker game to any platform, right?".
+Since Mr. Power created Droidtale, He've always had the thought about "if it is a VM, then you could reimplement it and port any GameMaker game to any platform, right?".
 
-Fast forward ten years, and while I was toying around with Claude Code I've thought about "what if I asked Claude to vibe code a GameMaker runner re-implementation in Kotlin lol". Of course, this did not go well because Claude was not even able to render the Undertale intro sequence, until I intervened and started nudging it in the right direction. After nudging it, and debugging it manually, it actually got somewhere and was able to render Undertale's intro sequence up until the main menu...
+Fast forward ten years, and while he was toying around with Claude Code he've thought about "what if I asked Claude to vibe code a GameMaker runner re-implementation in Kotlin lol". Of course, this did not go well because Claude was not even able to render the Undertale intro sequence, until he intervened and started nudging it in the right direction. After nudging it, and debugging it manually, it actually got somewhere and was able to render Undertale's intro sequence up until the main menu...
 
-...and that's when I found out that we were onto something here and that the idea could be viable. And that's when I started learning C and rewriting the runner to be cross-platform.
+...and that's when he found out that we were onto something here and that the idea could be viable. And that's when I started learning C and rewriting the runner to be cross-platform.
 
-Butterscotch is not "vibe coded", that is, I didn't just let Claude go wild and implement everything. This does not work, and anyone that says that "vibe coding" works and will replace all developers is lying, or they aren't skilled enough to know what good code looks like, or they are rich and have a lot of money to spend while Claude keeps getting stuck trying to resolve bugs that they don't know how to fix like [it was a infinite monkey theorem](https://en.wikipedia.org/wiki/Infinite_monkey_theorem).
+### Now Kostya speaks in!
+Wiiscotch is "vibe coded", that is, I did let Qwen Coder implement everything (and will be properly tested). This will work (for now), and anyone that says that "vibe coding" works and will replace all developers are lying, or they aren't skilled enough to know what good code looks like, or they are rich and have a lot of money to spend while Claude keeps getting stuck trying to resolve bugs that they don't know how to fix like [it was a infinite monkey theorem](https://en.wikipedia.org/wiki/Infinite_monkey_theorem).
 
-Butterscotch is made with an "agentic engineering" approach. I did use Claude Code to implement a lot of things in Butterscotch, but every line of code was reviewed and refactored by me to polish the code that Claude made (Claude LOVES creating duplicate code and creating some non-sensical things).
+Wiiscotch is made with an "agentic engineering" approach. I did use Qwen Coder to implement a lot of things in Wiiscotch, but every time this is tested on a real authentic Nintendo Wii hardware and a problem will be send as a feedback.
 
-That does not mean that Butterscotch's code is good however, I'm not a C developer (JVM my beloved) and I know just enough C to be dangerous (who doesn't like a use after free crash??) so some of the code decisions are questionable at best, harmful at worst. That's why if you see the codebase, it really feels like it is a Java developer trying to create a C application.
+That does not mean that Wiiscotch's code is good however, I'm not a C developer (Python my beloved) and I know just enough C to be dangerous (who doesn't like a use after free crash??) so some of the code decisions are questionable at best, harmful at worst. That's why if you see the codebase, it really feels like it is a Java developer trying to create a C application.
 
+## The tips from the original project itself.
 That said, here are some tips and tricks with using Claude Code for projects like this:
 
 * The project itself, when you think about it, is somewhat trivial, which is why Claude excelled on it.
     * [UndertaleModTool](https://github.com/UnderminersTeam/UndertaleModTool) has bytecode documentation and you can decompile Undertale's source code to GML, so Claude can compare the bytecode to the original GML code to figure out what the interpreter is doing wrong.
     * [GameMaker-HTML5](https://github.com/YoYoGames/GameMaker-HTML5) has GML's builtin variables and functions straight from YoYo Games, so it can just port the functions from JavaScript to C.
     * While decompiled code is hard for us to understand, LLMs are quite good at it. Telling Claude to read Ghidra's decompiled GameMaker: Studio runner code to figure out some bytecode interpreter opcodes shenanigans actually had surprising results.
-    * This isn't the first project that attempts something like this! [OpenGM](https://github.com/misternebula/OpenGM) is also a open source GameMaker: Studio runner re-implementation, written in C# instead of C, and it exists since 2024! While Claude did *not* read OpenGM's source code during Butterscotch's development, that doesn't mean that Claude never studied OpenGM's source code during its training. So maybe when it was implementing things in Butterscotch, it may have pulled things that it had previously learned from OpenGM and other similar projects.
-* Adding ways for Claude to know what's going on in the runner makes it way easier for it to know what is the issue. Things that are useful for us are also useful for them. That's why Butterscotch has a lot of `--trace-*` functions, because Claude can use it to trace what is going on in the runner to try pointing it to the right direction to where it may be going wrong. And when that fails, we as humans can use the very useful `--trace-*` functions too.
+    * This isn't the first project that attempts something like this! [OpenGM](https://github.com/misternebula/OpenGM) is also a open source GameMaker: Studio runner re-implementation, written in C# instead of C, and it exists since 2024! While Claude did *not* read OpenGM's source code during Wiiscotch's development, that doesn't mean that Claude never studied OpenGM's source code during its training. So maybe when it was implementing things in Wiiscotch, it may have pulled things that it had previously learned from OpenGM and other similar projects.
+* Adding ways for Claude to know what's going on in the runner makes it way easier for it to know what is the issue. Things that are useful for us are also useful for them. That's why Wiiscotch has a lot of `--trace-*` functions, because Claude can use it to trace what is going on in the runner to try pointing it to the right direction to where it may be going wrong. And when that fails, we as humans can use the very useful `--trace-*` functions too.
 * Adding ways for Claude to take screenshots lets them try to tackle graphical related issues, because you can tell them "if the old screenshot is different than the new screenshot, you've probably fixed the issue".
 * Adding input recording and playback allows us to record a set of inputs that reproduce a specific bug, and then we can tell Claude to playback our inputs to figure out what could be going wrong to cause that specific bug.
 * You still need to know EXACTLY what you want, and know HOW are you going to break down the problem into small pieces. Just like what you already do when programming. If I didn't already have previous knowledge on how the YoYo runner worked, I would've probably said "pls port Undertale for me kthxbye" and that would've probably gone nowhere.
 
-However I still needed to keep an eye out on whatever Claude was doing if they were trying to fix a non-trivial problem, because if I didn't attempt to nudge it in the right direction, it would go completely off the rails.
+However I still needed to keep an eye out on whatever Qwen Coder was doing if they were trying to fix a non-trivial problem, because if I didn't attempt to nudge it in the right direction, it would go completely off the rails.
+
+
+
+# NOTES
+
+There ARE some problems here to make out here.
+
+* Sometimes Qwen Coder does ACTUALLY nothing to the code.
+* I have to rely on **hopes and dreams** to make it do it right.

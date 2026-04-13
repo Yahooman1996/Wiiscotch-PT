@@ -1,2 +1,42 @@
+```
+# Build system
 build/
-.gitignore
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+
+# Compiled objects
+*.o
+*.obj
+*.a
+*.so
+*.dll
+*.exe
+
+# Dependencies
+node_modules/
+venv/
+.venv/
+__pycache__/
+*.egg-info/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs and temp files
+*.log
+*.tmp
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+*.env.*
+```

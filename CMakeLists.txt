@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(butterscotch C)
+project(wiiscotch C)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -8,11 +8,11 @@ add_compile_options(-Wall -Wextra)
 set(PLATFORM "" CACHE STRING "Platform backend")
 
 # Build metadata
-set(BUTTERSCOTCH_COMMIT_HASH "unknown" CACHE STRING "Git commit hash")
-set(BUTTERSCOTCH_COMMIT_DATE "unknown" CACHE STRING "Git commit date")
+set(WIISCOTCH_COMMIT_HASH "unknown" CACHE STRING "Git commit hash")
+set(WIISCOTCH_COMMIT_DATE "unknown" CACHE STRING "Git commit date")
 add_compile_definitions(
-    BUTTERSCOTCH_COMMIT_HASH="${BUTTERSCOTCH_COMMIT_HASH}"
-    BUTTERSCOTCH_COMMIT_DATE="${BUTTERSCOTCH_COMMIT_DATE}"
+    WIISCOTCH_COMMIT_HASH="${WIISCOTCH_COMMIT_HASH}"
+    WIISCOTCH_COMMIT_DATE="${WIISCOTCH_COMMIT_DATE}"
 )
 
 if(PLATFORM STREQUAL "")
@@ -23,11 +23,11 @@ file(GLOB SOURCES src/*.c)
 # Platform specific files builds
 file(GLOB PLATFORM_SOURCES src/${PLATFORM}/*.c)
 
-add_executable(butterscotch ${SOURCES} ${PLATFORM_SOURCES})
-target_include_directories(butterscotch PRIVATE ${CMAKE_SOURCE_DIR}/src)
+add_executable(wiiscotch ${SOURCES} ${PLATFORM_SOURCES})
+target_include_directories(wiiscotch PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
 # stb_ds
-target_include_directories(butterscotch PUBLIC vendor/stb/ds)
+target_include_directories(wiiscotch PUBLIC vendor/stb/ds)
 
 if(PLATFORM STREQUAL "glfw")
     # GLAD
@@ -35,13 +35,13 @@ if(PLATFORM STREQUAL "glfw")
     target_include_directories(glad PUBLIC vendor/glad/include)
 
     # stb_image
-    target_include_directories(butterscotch PUBLIC vendor/stb/image)
+    target_include_directories(wiiscotch PUBLIC vendor/stb/image)
 
     # stb_vorbis
-    target_include_directories(butterscotch PUBLIC vendor/stb/vorbis)
+    target_include_directories(wiiscotch PUBLIC vendor/stb/vorbis)
 
     # miniaudio
-    target_include_directories(butterscotch PUBLIC vendor/miniaudio)
+    target_include_directories(wiiscotch PUBLIC vendor/miniaudio)
 
     if(MINGW)
         find_package(glfw3 REQUIRED)
@@ -49,9 +49,9 @@ if(PLATFORM STREQUAL "glfw")
 
         # Target Windows 7+ (avoids referencing newer APIs like MapViewOfFileNuma2 that MinGW import libs don't provide)
         # https://github.com/mirror/mingw-w64/blob/master/mingw-w64-headers/include/sdkddkver.h
-        target_compile_definitions(butterscotch PRIVATE _WIN32_WINNT=0x0601 NTDDI_VERSION=0x06010000 WIN32_LEAN_AND_MEAN)
-        target_link_libraries(butterscotch ${GLFW3_LIBRARIES} glad m opengl32 gdi32 winmm)
-        target_link_options(butterscotch PRIVATE -static)
+        target_compile_definitions(wiiscotch PRIVATE _WIN32_WINNT=0x0601 NTDDI_VERSION=0x06010000 WIN32_LEAN_AND_MEAN)
+        target_link_libraries(wiiscotch ${GLFW3_LIBRARIES} glad m opengl32 gdi32 winmm)
+        target_link_options(wiiscotch PRIVATE -static)
     else()
         find_package(PkgConfig REQUIRED)
         pkg_check_modules(GLFW3 REQUIRED glfw3)
@@ -68,15 +68,15 @@ if(PLATFORM STREQUAL "glfw")
     endif()
     set(ENABLE_ASAN ${ENABLE_ASAN_DEFAULT} CACHE BOOL "Enable AddressSanitizer")
     if(ENABLE_ASAN AND NOT MINGW)
-        target_compile_options(butterscotch PRIVATE -fsanitize=address -fno-omit-frame-pointer)
-        target_link_options(butterscotch PRIVATE -fsanitize=address)
+        target_compile_options(wiiscotch PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+        target_link_options(wiiscotch PRIVATE -fsanitize=address)
     endif()
 elseif(PLATFORM STREQUAL "ps2")
     # The PS2 EE has a single-precision FPU only, so double is software-emulated
     add_compile_definitions(USE_FLOAT_REALS)
     # By disabling Int64 support, we can fit the entire RValue struct in 8 bytes, improving performance and memory usage
     add_compile_definitions(NO_RVALUE_INT64)
-    # Disable Butterscotch VM/interpreter tracing checks
+    # Disable Wiiscotch VM/interpreter tracing checks
     add_compile_definitions(DISABLE_VM_TRACING)
     # Platform identifier for PS2-specific code paths (e.g., scratchpad allocation)
     add_compile_definitions(PLATFORM_PS2)
@@ -92,9 +92,9 @@ elseif(PLATFORM STREQUAL "ps2")
 
     if(PS2)
         # Compiling on the Docker container
-        target_include_directories(butterscotch PRIVATE $ENV{PS2SDK}/ee/include $ENV{PS2SDK}/common/include $ENV{PS2DEV}/ee/include $ENV{GSKIT}/include)
-        target_link_directories(butterscotch PRIVATE $ENV{PS2SDK}/ee/lib $ENV{GSKIT}/lib)
-        target_link_libraries(butterscotch gskit dmakit audsrv pad mc patches kernel c m)
+        target_include_directories(wiiscotch PRIVATE $ENV{PS2SDK}/ee/include $ENV{PS2SDK}/common/include $ENV{PS2DEV}/ee/include $ENV{GSKIT}/include)
+        target_link_directories(wiiscotch PRIVATE $ENV{PS2SDK}/ee/lib $ENV{GSKIT}/lib)
+        target_link_libraries(wiiscotch gskit dmakit audsrv pad mc patches kernel c m)
 
         # Embed ps2sdk IRX modules (sio2man, padman) as C arrays via bin2c
         # This avoids loading from rom0: which has compatibility issues between fat/slim PS2
@@ -141,18 +141,18 @@ elseif(PLATFORM STREQUAL "ps2")
             )
         endif()
 
-        target_sources(butterscotch PRIVATE ${IRX_GEN_DIR}/sio2man_irx.c ${IRX_GEN_DIR}/mcman_irx.c ${IRX_GEN_DIR}/mcserv_irx.c ${IRX_GEN_DIR}/padman_irx.c)
+        target_sources(wiiscotch PRIVATE ${IRX_GEN_DIR}/sio2man_irx.c ${IRX_GEN_DIR}/mcman_irx.c ${IRX_GEN_DIR}/mcserv_irx.c ${IRX_GEN_DIR}/padman_irx.c)
         if(NOT DISABLE_PS2_AUDIO)
-            target_sources(butterscotch PRIVATE ${IRX_GEN_DIR}/freesd_irx.c ${IRX_GEN_DIR}/audsrv_irx.c)
+            target_sources(wiiscotch PRIVATE ${IRX_GEN_DIR}/freesd_irx.c ${IRX_GEN_DIR}/audsrv_irx.c)
         endif()
-        target_include_directories(butterscotch PRIVATE ${IRX_GEN_DIR})
+        target_include_directories(wiiscotch PRIVATE ${IRX_GEN_DIR})
 
         # ===[ gprof Profiling Support ]===
         option(ENABLE_GPROF_PROFILING "Enable gprof profiling for PS2" OFF)
         if(ENABLE_GPROF_PROFILING)
             add_compile_definitions(GPROF_PROFILING)
-            target_compile_options(butterscotch PRIVATE -pg)
-            target_link_options(butterscotch PRIVATE -pg)
+            target_compile_options(wiiscotch PRIVATE -pg)
+            target_link_options(wiiscotch PRIVATE -pg)
 
             # Embed USB mass storage IRX modules for writing gmon.out when not running from host:
             add_custom_command(
@@ -179,7 +179,7 @@ elseif(PLATFORM STREQUAL "ps2")
                 DEPENDS ${IRX_DIR}/usbmass_bd.irx
                 COMMENT "Embedding usbmass_bd.irx (profiler)"
             )
-            target_sources(butterscotch PRIVATE
+            target_sources(wiiscotch PRIVATE
                 ${IRX_GEN_DIR}/usbd_irx.c
                 ${IRX_GEN_DIR}/bdm_irx.c
                 ${IRX_GEN_DIR}/bdmfs_fatfs_irx.c
@@ -187,7 +187,7 @@ elseif(PLATFORM STREQUAL "ps2")
             )
         endif()
     else()
-        # This block is for when we are developing Butterscotch with CLion!
+        # This block is for when we are developing Wiiscotch with CLion!
         # ps2sdk and gsKit scatter headers across per-module subdirectories;
         # the flat include/ layout only exists after building the SDK.
         # We use file(GLOB) to discover all include dirs automatically.
@@ -198,9 +198,9 @@ elseif(PLATFORM STREQUAL "ps2")
 
         # _EE is normally set by the PS2 toolchain; without it, tamtypes.h
         # refuses to define u64/u32/etc. We set it so CLion can resolve them.
-        target_compile_definitions(butterscotch PRIVATE _EE)
+        target_compile_definitions(wiiscotch PRIVATE _EE)
 
-        target_include_directories(butterscotch PRIVATE
+        target_include_directories(wiiscotch PRIVATE
                 ${PS2SDK_EE_INCLUDES}
                 ${PS2SDK_EE_RPC_INCLUDES}
                 ${PS2SDK_EE_NETWORK_INCLUDES}
@@ -211,6 +211,62 @@ elseif(PLATFORM STREQUAL "ps2")
                 ${CMAKE_SOURCE_DIR}/ps2dev-headers/newlib-include
                 ${CMAKE_SOURCE_DIR}/ps2dev-headers/gcc-include
         )
+    endif()
+elseif(PLATFORM STREQUAL "wii")
+    # Detect if we're using devkitPPC toolchain
+    if(CMAKE_TOOLCHAIN_FILE MATCHES "Wii\\.cmake$" OR DEFINED ENV{DEVKITPPC})
+        set(WII TRUE)
+    endif()
+
+    # The Wii's Broadway CPU (PowerPC-based) has a full FPU with double-precision support.
+    # However, GameMaker primarily uses single-precision floats, so we use float for better performance.
+    # The FPU can execute single-precision operations natively without software emulation overhead.
+    # Using float reduces memory bandwidth and cache pressure, which is critical on Wii's limited RAM.
+    add_compile_definitions(USE_FLOAT_REALS)
+    # Disable Wiiscotch VM/interpreter tracing checks for performance
+    add_compile_definitions(DISABLE_VM_TRACING)
+    
+    # Wii-specific compile options
+    # -fsingle-precision-constant ensures float literals are treated as single-precision
+    add_compile_options(-fsingle-precision-constant)
+    
+    # Option to enable DVD support (requires libogc DVD interface)
+    option(WII_ENABLE_DVD_SUPPORT "Enable DVD storage medium support" ON)
+    # Option to enable USB mass storage support (requires libogc USB stack)  
+    option(WII_ENABLE_USB_STORAGE "Enable USB mass storage support" ON)
+    
+    if(WII_ENABLE_DVD_SUPPORT)
+        add_compile_definitions(WII_ENABLE_DVD_SUPPORT)
+    endif()
+    
+    if(WII_ENABLE_USB_STORAGE)
+        add_compile_definitions(WII_ENABLE_USB_STORAGE)
+    endif()
+    
+    if(WII)
+        # Compiling with devkitPPC
+        target_include_directories(wiiscotch PRIVATE 
+            $ENV{DEVKITPRO}/libogc/include 
+            $ENV{DEVKITPPC}/powerpc-eabi/include
+            $ENV{DEVKITPRO}/portlibs/wii/include
+        )
+        target_link_directories(wiiscotch PRIVATE $ENV{DEVKITPRO}/libogc/lib/wii)
+        target_link_libraries(wiiscotch wiikeyboard ogc m fat)
+        
+        # Set Wii-specific flags
+        target_compile_definitions(wiiscotch PRIVATE GEKKO HW_DOL)
+    else()
+        # Development mode (CLion, etc.)
+        # Check if devkitPro headers exist, otherwise warn user
+        if(EXISTS "${CMAKE_SOURCE_DIR}/devkitpro/libogc/include")
+            target_include_directories(wiiscotch PRIVATE
+                ${CMAKE_SOURCE_DIR}/devkitpro/libogc/include
+                ${CMAKE_SOURCE_DIR}/devkitpro/portlibs/wii/include
+            )
+        else()
+            message(WARNING "devkitPro headers not found. Wii platform files will fail to compile. Install devkitPro or use cross-compilation.")
+        endif()
+        target_compile_definitions(wiiscotch PRIVATE GEKKO HW_DOL)
     endif()
 else()
     message(FATAL_ERROR "Unknown platform! ${PLATFORM}")
