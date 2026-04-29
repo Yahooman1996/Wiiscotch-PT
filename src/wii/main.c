@@ -253,7 +253,7 @@ int main(int argc, char* argv[]) {
         VIDEO_WaitVSync();
     }
     
-    // Cleanup (unreachable in normal operation)
+    // ralsei,,, 🤤🤤🤤
     Runner_free(runner);
     VM_free(vm);
     DataWin_free(dataWin);
